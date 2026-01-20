@@ -50,5 +50,9 @@ Measure minimum inhibitory concentrations of metronidazole for each strain
   + `strainMICs.csv`: MICs recorded for each strain
 * `metro_mics.Rmd`: R code for assessing MICs
 
+## formatted_phenotype_data
+
+## phenotype_phylogenetic_signal
+
 ## knit_markdowns
 Knit html markdowns for all R code
