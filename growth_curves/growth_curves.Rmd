@@ -19,7 +19,7 @@ output: html_document
 
 ```{r, message=FALSE, warning=FALSE}
 library(tidyverse)
-library(xlsx)
+#library(xlsx) java incompatible with newer versions of RStudio?
 library(broom)
 library(rstatix)
 library(ape)
@@ -46,6 +46,7 @@ batches <- c("1A1", "1A2", "1B1", "1B2", "2A1", "2A2", "3A1", "3A2")
 
 figureOut <- "../../experiments_figures"
 suppTableOut <- "../../experiments_figures/supplementary_posthoc_tables.xlsx"
+formattedPhenDataOut <- "../formatted_phenotype_data"
 ```
 
   Import data
@@ -490,6 +491,9 @@ strain_growth_rate_DF <- growth_rate %>%
   with_groups(c(Sample, Species, Strain, Batch, BioRep), summarize, mSlope=mean(slope), sdSlope=sd(slope)) %>%
   mutate(Strain=factor(Strain, levels=strains))
 
+#save formatted growth rate data
+#write_csv(strain_growth_rate_DF, file.path(formattedPhenDataOut, "growth_rate.csv"))
+
 strain_growth_rate_DF %>%
   anova_test(mSlope~Strain) %>%
   formattable()
@@ -558,7 +562,7 @@ tree:
 
   We can now perform the analysis with Moran’s I:
 ```{r, message=FALSE, warning=FALSE, eval=FALSE, echo=FALSE}
-# sMoran.I(growthRates, W)
+# Moran.I(growthRates, W)
 ```
 
 # Carrying Capacity
@@ -603,10 +607,13 @@ qqplot
 
 #### One-way ANOVA
 ```{r, message=FALSE, warning=FALSE}
-strain_growth_rate_DF <- carryingCapacity %>%
+strain_carrying_cap_DF <- carryingCapacity %>%
   mutate(Strain=factor(Strain, levels=strains))
 
-strain_growth_rate_DF %>%
+#save formatted growth rate data
+#write_csv(strain_carrying_cap_DF, file.path(formattedPhenDataOut, "carrying_capacity.csv"))
+
+strain_carrying_cap_DF %>%
   anova_test(maxOD~Strain) %>%
   formattable()
 ```

@@ -19,7 +19,7 @@ output: html_document
 
 ```{r, message=FALSE,warning=FALSE}
 library(tidyverse)
-library(xlsx)
+#library(xlsx)
 library(broom)
 library(rstatix)
 library(ape)
@@ -47,7 +47,7 @@ species <- c("Gardnerella vaginalis", "Gardnerella sp. 2", "Gardnerella sp. 3", 
 
 figureOut <- "../../experiments_figures"
 suppTableOut <- "../../experiments_figures/supplementary_posthoc_tables.xlsx"
-
+formattedPhenDataOut <- "../formatted_phenotype_data"
 ```
 
   Import data
@@ -300,6 +300,16 @@ DF <- DF0 %>%
          SampleWell %!in% filterpHwells)
 ```
 
+  Save formatted data
+```{r, message=FALSE, warning=FALSE}
+pH_DF_save <- DF %>%
+  with_groups(c(Number, Species, Strain, pH, Batch, Plate, BioRep), summarize, mOD=mean(OD), sdOD=sd(OD)) %>%
+  mutate(pH=as.numeric(pH))
+
+#write_csv(pH_DF_save, file.path(formattedPhenDataOut, "pH_growth.csv"))
+```
+
+
 ## Plot
 ```{r, message=FALSE, warning=FALSE}
 annotationDF <- DF %>%
@@ -307,6 +317,7 @@ annotationDF <- DF %>%
   with_groups(c(Number, Species, Strain, pH, Batch, Plate, BioRep, Protocol), summarize, mOD=mean(OD), sdOD=sd(OD)) %>%
   with_groups(c(Species, Strain), summarize, y=mean(mOD)) %>%
   with_groups(Species, mutate, y=1.2-.2*rank(Strain))
+
 
 pHGrowthPlot <- DF %>%
   with_groups(c(Number, Species, Strain, pH, Batch, Plate, BioRep, Protocol), summarize, mOD=mean(OD), sdOD=sd(OD)) %>%

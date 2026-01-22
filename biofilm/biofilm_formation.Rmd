@@ -26,7 +26,7 @@ output: html_document
 
 ```{r, message=FALSE, warning=FALSE}
 library(tidyverse)
-library(xlsx)
+#library(xlsx)
 library(broom)
 library(rstatix)
 library(ape)
@@ -53,6 +53,7 @@ species <- c("Gardnerella vaginalis", "Gardnerella sp. 2", "Gardnerella sp. 3", 
 
 figureOut <- "../../experiments_figures"
 suppTableOut <- "../../experiments_figures/supplementary_posthoc_tables.xlsx"
+formattedPhenDataOut <- "../formatted_phenotype_data"
 ```
 
   Import data 
@@ -370,6 +371,9 @@ strain_OD_DF <- percentODDF %>%
   dplyr::rename(percentOD=`Percent OD`) %>%
   with_groups(c(Sample, Species, Strain, Batch, BioRep), summarize, mPercentOD=mean(percentOD), sdPercentOD=sd(percentOD))
 
+# save formatted data
+#write_csv(strain_OD_DF, file.path(formattedPhenDataOut, "percent_biofilm_od.csv"))
+
 strain_OD_DF %>%
   ggplot(aes(sample=mPercentOD)) +
   geom_qq_line() +
@@ -580,6 +584,9 @@ safDF %>%
 ```{r, message=FALSE, warning=FALSE}
 strain_saf_DF <- safDF %>%
   with_groups(c(Sample, Species, Strain, Batch, BioRep), summarize, mSafOD=mean(safraninOD), sdSafOD=sd(safraninOD))
+
+# save formatted data
+#write_csv(strain_saf_DF, file.path(formattedPhenDataOut, "safranin_od.csv"))
 
 strain_saf_DF %>%
   anova_test(mSafOD~Strain) %>%
