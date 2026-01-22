@@ -69,6 +69,6 @@ Annotate with Prokka v. 1.14.6 (prokka_annotate.sh)
 `docker cp 2c3602cdf52e:/20221026_Roary_95 '/Volumes/GoogleDrive-103667279570938865306/My Drive/Callahan Lab/gardnerella_experiments/strain_genomes'` to copy output directories to repository
 Also run roary on 80% blastp results based on output from 60% threshold results. copy output with:
 `docker cp 39935359e4ca:/20221031_Roary_80 '/Volumes/GoogleDrive-103667279570938865306/My Drive/Callahan Lab/gardnerella_experiments/strain_genomes'`
-3) Build phylogeny for 95% and 80% alignments using `/scripts/MLPhylogeny.sh
+3) Build phylogeny for 95% and 80% alignments using `/scripts/MLPhylogeny.sh. Output phylogeny used is `RAxML_bestTree.gardTree`
 
 
