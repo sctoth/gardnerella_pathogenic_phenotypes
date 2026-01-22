@@ -1,5 +1,5 @@
 # Systematic Assessment of Pathogenic Phenotypes of Gardnerella spp.
-Compare phenotypes related to pathogenicity in 22 phenotypically diverse strains of *Gardnerella*. We first verified the phylogenetic identity of the isolate strains and then the following phenotypes were tested:
+Compare phenotypes related to pathogenicity in 22 phenotypically diverse strains of *Gardnerella*. We first verified the phylogenetic identity of the isolate strains, and the following phenotypes were tested:
   
 * Growth rate and carrying capacity
 * Biofilm formation
@@ -60,6 +60,7 @@ Formatted phenotype data for growth rate, biofilm formation, and growth at varyi
 * `pH_growth.csv`: optical densities of strain growth at pH ranging from 3.5 to 7 calculated in `./pH_growth/pH_growth.Rmd`
 
 ## phenotype_phylogenetic_signal
+Testing phylogenetic association of measured pathogenic _Gardnerella_ phenotypes
 * `phylogenetic_signal_testing.Rmd`: R code to measure phylogenetic signal in measured phenotypes
 
 ## knit_markdowns
