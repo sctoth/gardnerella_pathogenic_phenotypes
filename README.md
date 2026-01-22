@@ -61,7 +61,7 @@ Formatted phenotype data for growth rate, biofilm formation, and growth at varyi
 
 ## phenotype_phylogenetic_signal
 Testing phylogenetic association of measured pathogenic _Gardnerella_ phenotypes
-* `phylogenetic_signal_testing.Rmd`: R code to measure phylogenetic signal in measured phenotypes
+* `phylogenetic_signal_testing.Rmd`: R code to test phylogenetic signal in measured phenotypes
 
 ## knit_markdowns
 Knit html markdowns for all R code
