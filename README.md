@@ -1,7 +1,7 @@
 # Systematic Assessment of Pathogenic Phenotypes of Gardnerella spp.
 Compare phenotypes related to pathogenicity in 22 phenotypically diverse strains of *Gardnerella*. We first verified the phylogenetic identity of the isolate strains and then the following phenotypes were tested:
   
-* Growth rate and carrying capactiy
+* Growth rate and carrying capacity
 * Biofilm formation
 * Growth at varying pH
 * Metronidazole MIC
@@ -15,8 +15,9 @@ Verify the phylogenetic identity of the 22 *Garderella* isolate strains.
    + `roaryCoreGenome.sh`:  Define core genome of *Gardnerella* isolate strain genomes and reference genomes using [Roary](https://sanger-pathogens.github.io/Roary/) and perform multiple alignment.
    + `MLPhylogeny.sh`: Use [RAxML](https://github.com/stamatak/standard-RAxML) to reconstruct phylogeny.
    + `MLPhylogeny_root.sh`: Root phylogeny with *Bifidobacterium longum*
-* `strainIDs.csv`: Strain names, species names, and genbank accessions of strains with a genome deposited in GenBank
+* `strainIDs.csv`: Strain names, species names, and GenBank accessions of strains with a genome deposited in GenBank
 * `gard_strain_phylogenetics.Rmd`: R code for phylogenetic comparison of strains.
+* `RAxML_bestTree.gardTree`: Output tree used for measuring phylogenetic signal
   
 ## growth_curves
 Measure the exponential growth rate and carrying capacity of each strain.
