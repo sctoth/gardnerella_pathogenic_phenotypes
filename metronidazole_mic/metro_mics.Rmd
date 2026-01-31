@@ -60,6 +60,11 @@ strainSpecies <- strainIDs %>%
   select(Strain, Species) %>%
   unique
 
+strainMICs <- read_csv("./data/strainMICs.csv") %>%
+  left_join(strainIDs %>% select(Number, Strain), by = "Number") %>%
+  select(Strain, Number, everything()) %>%
+  write_csv("./data/strainMICs_IDs.csv") 
+
 ```
 
 
