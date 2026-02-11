@@ -9,10 +9,10 @@
 # /Volumes/GoogleDrive/My Drive/Callahan Lab/metagenome_gardnerella/gardPhylogeny/prokka_annotated_genomes/gff
 # Strain Genomes:
 # /Volumes/GoogleDrive/My Drive/Callahan Lab/gardnerella_experiments/strain_genomes/prokka_annotated_genomes/gff
-indir=/Users/hlberman/Desktop/gff 
+#indir=/Users/hlberman/Desktop/gff 
 #outdir60=20221026_Roary_60
 #outdir95=20221026_Roary_95
-outdir80=20221031_Roary_80
+#outdir80=20221031_Roary_80
 
 #pull roary docker image if not already with below command
 #docker pull sangerpathogens/roary
@@ -28,15 +28,15 @@ outdir80=20221031_Roary_80
 #   $outdir95 $indir/*.gff
 
 #Run with blastp threshold of 80% to determine core genome to rebuild phylogeny
-docker run --volume $indir:$indir \
-   sangerpathogens/roary roary -e --mafft -n -v -i 80 -r -o clusters -f \
-   $outdir80 $indir/*.gff
+#docker run --volume $indir:$indir \
+#   sangerpathogens/roary roary -e --mafft -n -v -i 80 -r -o clusters -f \
+#   $outdir80 $indir/*.gff
 
-#Run with blastp threshold of 95% with B longum 51A genome for outgroup rooting.
+#Run with blastp threshold of 80% with B longum 51A genome for outgroup rooting.
 
-# indirOutgroup=/Users/hlberman/Desktop/outgroup_gff
-# outdirOutgroup=<>_Roary_outgroup
+indirOutgroup=/Users/hannaberman/Desktop/outgroup_gff
+outdirOutgroup=20260208_Roary_outgroup
 
-# docker run --volume $indirOutgroup:$indirOutgroup \
-#     sangerpathogens/roary roary -e --mafft -n -v -i 95 -r -o clusters -f \
-#     $outdirOutgroup $indirOutgroup/*.gff
+docker run --volume $indirOutgroup:$indirOutgroup \
+     sangerpathogens/roary roary -e --mafft -n -v -i 80 -r -o clusters -f \
+     $outdirOutgroup $indirOutgroup/*.gff

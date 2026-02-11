@@ -7,7 +7,7 @@
 # A. Stamatakis: "RAxML Version 8: A tool for Phylogenetic Analysis and Post-Analysis of Large Phylogenies". In Bioinformatics, 2014
 
 inaln=/home6/hlberman/gard_isolates/strain_phylogeny/core_gene_alignment.aln
-outdir=/home6/hlberman/gard_isolates/strain_phylogeny/20221027_ml_phylogeny
+outdir=/home6/hlberman/gard_isolates/strain_phylogeny/20221101_ml_phylogeny
 
 # compute maximum liklihood phylogeny
 # -p = parsimony random number seed
