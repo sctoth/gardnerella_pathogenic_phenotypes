@@ -6,3 +6,4 @@ Formatted phenotype data for growth rate, biofilm formation, and growth at varyi
 * percent_biofilm_od.csv: percent of growth as biofilm calculated in ./biofilm/biofilm_formation.Rmd
 * safranin_od.csv: biofilm growth measured by optical density of safranin-stained biofilms calculated in ./biofilm/biofilm_formation.Rmd
 * pH_growth.csv: optical densities of strain growth at pH ranging from 3.5 to 7 calculated in ./pH_growth/pH_growth.Rmd
+* metro_mic.csv: Metronidazole MICs formatted in ./metronidazole_mic/metro_mics.Rmd

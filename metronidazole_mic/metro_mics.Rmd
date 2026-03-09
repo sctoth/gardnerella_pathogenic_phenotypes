@@ -42,7 +42,7 @@ speciesAbbrevs <- c("G. vag", "G. sp. 2", "G. sp. 3", "G. pio.", "G. leo.", "G. 
 
 metroDoses <- c("0.016", "0.023", "0.032", "0.047", "0.064", "0.094", "0.125", "0.19", "0.25", "0.38", "0.50", "0.75", "1.0", "1.5", "2", "3", "4", "6", "8", "12", "16", "24", "32", "48", "64", "96", "128", "192", "256", ">256")
 
-h48Strains <- c("C0084H9", "C0093B3", "C0101A1", "UM35")
+h48Strains <- c("C0084H9", "C0093B3", "C0101A1", "UM35") # strains with 48-hour incubation period
 
 figureOut <- "../../experiments_figures"
 ```
@@ -112,7 +112,11 @@ odDF %>%
 # Metronidazole Minimum Inhibitory Concentrations
 ```{r, message=FALSE, warning=FALSE, echo=FALSE}
 micDF <- strainMICs %>%
-    left_join(strainIDs)
+    left_join(strainIDs) |>
+    mutate(Sample=paste(Strain, BioRep, TechRep, sep=".")) |>
+    select(Sample, Strain, Species, Number, BioRep, TechRep, MIC, Notes)
+
+#write_csv(micDF, "../formatted_phenotype_data/metro_mic.csv") # save formatted phenotype data
 
 micDF1 <- micDF %>%
   filter(MIC != "hard to read",
@@ -155,7 +159,7 @@ speciesBar <- strainSpecies %>%
     theme(legend.position = "none")
 
 plot_grid(speciesBar, micPlot, ncol=1, rel_heights = c(0.08, 1),  align = "v", axis = "lr")
-ggsave(file.path(figureOut, paste(Sys.Date(), "Figure6_metro_mic.png", sep="_")))
+#ggsave(file.path(figureOut, paste(Sys.Date(), "Figure6_metro_mic.png", sep="_")))
 ```
 
   The MIC of most strains was >256. Results were reproduced with most strains. UM35 displayed variability among biological replicates. The MIC for biological replicate 1 was >256 and 16 for replicate 2. Two additional biological replicates yielded results between these values: MICs of 24, 64, 96.
