@@ -1,0 +1,375 @@
+---
+title: "(Rooted Updated Tree) Testing Phylogenetic Signal in Phenotypic Data"
+author: "Spencer Toth"
+date: "`r Sys.Date()`"
+output:
+  html_document: default
+  pdf_document: default
+---
+```{r, message=FALSE, warning=FALSE}
+library(tidyverse)
+library(ggtree)
+library(phylosignal)
+library(broom)
+library(rstatix)
+library(adephylo)
+library(ape)
+library(phylobase)
+library(formattable)
+library(corrplot)
+library(ggbeeswarm)
+library(cowplot)
+library(ggpubr)
+library(grid)
+library(gridGraphics)
+library(ggplot2)
+library(readr) 
+library(dplyr)
+library(tidyr)
+library(patchwork)
+library(phytools)
+`%!in%` <- negate(`%in%`)
+```
+
+## Prepare data for analysis 
+Import phenotype and phylogenetic tree data
+```{r, message=FALSE, warning=FALSE, echo=TRUE}
+
+# Import phenotypic data
+
+# Growth Rates
+growth_rate_data_file <- read_csv("../formatted_phenotype_data/growth_rate.csv")
+
+# Import phylogenetic tree 
+#tr <- read.tree("/Users/spencertoth/Desktop/research_ongoing/gardnerella_phylogenetic_signal/gardnerella_pathogenic_phenotypes_1_17_2026/RAxML_bestTree.gardTree")
+tr <- read.tree("/Users/spencertoth/Desktop/research_ongoing/gardnerella_phylogenetic_signal/unrootedGardPhylogeny_withOutgroup.tre")
+outgroup <- "QUERY___B_longum_51A" 
+#tr_rooted <- root(tr, outgroup = "QUERY___B_longum_51A", resolve.root = TRUE)
+#tr <- tr_rooted
+#tr <- read.tree("/Users/spencertoth/Desktop/research_ongoing/gardnerella_phylogenetic_signal/rootedGardPhylogeny_noOutgroup.tre")
+is.rooted(tr)
+# Rename tree nodes to match strain names in strain-phenotype data 
+numeric_tips <- tr$tip.label[tr$tip.label %in% c("101", "5-1")]
+tr$tip.label[match(numeric_tips, tr$tip.label)] <- paste0("Gv", numeric_tips)
+tr$tip.label[tr$tip.label == "14018"] <- "S14018"
+tip_labels <- tr$tip.label
+is.rooted(tr)
+```
+
+Average the phenotype values across technical replicates per strain  
+```{r, message=FALSE, warning=FALSE, echo=TRUE}
+growth_rate_data <- growth_rate_data_file %>%
+  mutate(Strain = as.character(Strain)) %>%
+  group_by(Strain) %>% summarise(mean_mSlope = mean(mSlope, na.rm = TRUE))
+gr_vector <- setNames(growth_rate_data$mean_mSlope, growth_rate_data$Strain)
+gr_range <- range(gr_vector, na.rm = TRUE)
+```
+Rename complete-numeric strains  
+```{r, message=FALSE, warning=FALSE, echo=TRUE}
+# Strain 14018 not present in: pb_vector, sf_vector (did not pass QC for these experiments)
+vecs <- list(gr=gr_vector)
+vecs[] <- lapply(vecs, function(v) {
+  idx <- names(v) == "14018"   
+  if(any(idx)) names(v)[idx] <- "S14018"   
+  v
+})
+
+({gr_vector<<-vecs$gr})
+names(gr_vector)
+```
+
+## Update: "phylosignal" R-package used to conduct phylogenetic signal tests (Moran's I and Pagel’s lambda) 
+Subset phylogenetic tree to the strains with phenotype information 
+```{r, message=FALSE, warning=FALSE, echo=TRUE}
+# Phenotypes with all 22 strains: carrying capacity, growth rate and minimum pH
+data_tips <- intersect(names(gr_vector), tr$tip.label)  
+data_tips <- union(data_tips, outgroup) # keep outgroup  
+tr_subset  <- keep.tip(tr, data_tips)
+tr_rooted  <- root(tr_subset, outgroup = outgroup, resolve.root = TRUE)
+tr_subset <- drop.tip(tr_rooted, outgroup)
+#tr_subset <- drop.tip(tr_subset, outgroup)
+
+tip_labels <- tr_subset$tip.label
+n_strains <- length(tip_labels) # 22
+
+p <- ggtree(tr_subset) +
+  geom_rootedge(rootedge = 0.05, colour = "black", linewidth = 1) +
+  geom_tiplab(size = 4) +
+  xlim(NA, 0.75)
+p
+```
+
+
+Moran's I and Pagel's Lambda: Phylogenetic Signal along BM Gradient 
+```{r, message=FALSE, warning=FALSE, echo=TRUE, results="hide"}
+# Distribution of Test Statistic as percentage of BM increases
+set.seed(42)
+
+plot(tr_subset, type="phylogram", root.edge=0.5)
+is.rooted(tr_subset)
+phylosim <- phyloSim(tree = tr_subset, methods = c("I", "Lambda"), model = "BM", pb = FALSE)
+
+```
+
+```{r, message=FALSE, warning=FALSE, echo=TRUE}
+plot(phylosim, stacked.methods = FALSE, quantiles = c(0, 1), ylab = "Phylogenetic Signal Value")
+plot.phylosim(phylosim, what = "pval", stacked.methods = TRUE)
+mean(phylosim$sim.stat[1, 1, ])  # I at 0% BM 
+mean(phylosim$sim.stat[1, 2, ])   # Lambda at 0% BM 
+
+is.rooted(tr_subset)
+set.seed(42)
+# Simulated traits along Brownian Motion given phylogenetic tree 
+bm_raw <- rTraitCont(tr_subset, model = "BM")
+# Normalize to 0-1 range for comparison with growth rate data 
+bm <- (bm_raw - min(bm_raw)) / (max(bm_raw) - min(bm_raw))
+
+# Random generated trait dataset 
+random_raw <- rnorm(n_strains)
+# Scaled to 0-1 range for comparison with growth rate data
+random <- (random_raw - min(random_raw)) / (max(random_raw) - min(random_raw))
+
+dat_growth_rate <- data.frame(
+  growth_rate = gr_vector[match(tip_labels, names(gr_vector))],   
+  random      = random,
+  bm          = bm
+  
+)
+rownames(dat_growth_rate) <- tip_labels
+p4d_growth_rate <- phylo4d(tr_subset, dat_growth_rate)
+# Trait Distribution
+barplot.phylo4d(p4d_growth_rate, tree.type = "phylo", tree.ladderize = TRUE, center = FALSE, scale = FALSE)
+# Z-scores 
+barplot.phylo4d(p4d_growth_rate, tree.type = "phylo", tree.ladderize = TRUE)
+
+phyloSignal(p4d = p4d_growth_rate, methods = c("I", "Lambda"))
+
+# Phylogenetic correlogram (uses Local Moran's I autocorrelation)
+growth_rate.crlg <- phyloCorrelogram(p4d_growth_rate, trait = "growth_rate")
+random.crlg <- phyloCorrelogram(p4d_growth_rate, trait = "random")
+bm.crlg <- phyloCorrelogram(p4d_growth_rate, trait = "bm")
+
+plot(bm.crlg, main = "Brownian Motion Simulation (Strong Signal)")
+plot(random.crlg, main = "Random Trait (No Signal)")
+plot(growth_rate.crlg, main = "Phenotypic Trait: Growth Rate")
+
+# Local Indicator of Phylogenetic Association (LIPA)
+growth_rate.lipa <- lipaMoran(p4d_growth_rate)
+growth_rate.lipa.p4d <- lipaMoran(p4d_growth_rate, as.p4d = TRUE)
+
+barplot.phylo4d(p4d_growth_rate, bar.col = (growth_rate.lipa$p.value < 0.05) + 1, tree.type = "phylo", tree.ladderize = TRUE, center = FALSE, scale = FALSE)
+barplot.phylo4d(growth_rate.lipa.p4d, bar.col = (growth_rate.lipa$p.value < 0.05) + 1, tree.type = "phylo", tree.ladderize = TRUE, center = FALSE, scale = FALSE)
+            
+```
+
+
+
+
+
+
+Perform permutation test on Pagel's Lambda statistic 
+```{r, message=FALSE, warning=FALSE, echo=TRUE, results="hide"}
+# Extract tree + observed and simulated traits  
+tree <- as(p4d_growth_rate, "phylo")
+trait_data <- p4d_growth_rate@data  # (growth_rate, random, bm)
+trait_names <- colnames(trait_data)
+
+# Number of permutations
+n_perm <- 1000
+set.seed(42)
+
+# Store results for all traits
+results <- list()
+
+# Loop through each trait
+for(j in 1:ncol(trait_data)) {
+  trait <- trait_data[[j]]
+  trait_name <- trait_names[j]
+  
+  cat("\n---", trait_name, "---\n")
+  
+ # Pagel's λ  
+  obs_lambda <- phylosig(tree, trait, method = "lambda")$lambda
+  
+  # Generate null distribution using 1000 permutations of trait data
+  lambda_null <- numeric(n_perm)
+  for(i in 1:n_perm) {
+    shuffled_trait <- sample(trait)
+    lambda_null[i] <- phylosig(tree, shuffled_trait, method = "lambda")$lambda
+  }
+  
+  # right-tailed (We reject H₀ if observed λ is unexpectedly large i.e. right tail)
+  p_val <- mean(lambda_null >= obs_lambda)
+  
+  results[[trait_name]] <- list(
+    obs_lambda = obs_lambda,
+    p_value = p_val,
+    null_dist = lambda_null
+  )
+  
+  cat("Observed λ =", round(obs_lambda, 4), "\n")
+  cat("p-value =", round(p_val, 4), "\n")
+}
+
+```
+
+```{r, message=FALSE, warning=FALSE, echo=TRUE}
+# Plot null distribution 
+par(mfrow=c(1,3), mar=c(4,4,2,1))
+for(trait_name in names(results)) {
+  res <- results[[trait_name]]
+  dens <- density(res$null_dist)
+  
+  plot(dens, main=trait_name, xlab="λ", lwd=2, 
+       xlim=c(0,1), ylim=c(0,max(dens$y)*1.2))
+  abline(v=res$obs_lambda, col="red", lwd=3, lty=2)
+  
+  # Shade area beyond observed
+  x_tail <- seq(res$obs_lambda, 1, len=100)
+  y_tail <- approx(dens$x, dens$y, xout=x_tail)$y
+  polygon(c(res$obs_lambda, x_tail, 1), c(0, y_tail, 0), 
+          col=rgb(1,0,0,0.3), border=NA)
+}
+
+# Print Results 
+results_df <- data.frame(
+  trait = trait_names,
+  lambda = sapply(results, function(x) round(x$obs_lambda, 4)),
+  p_value = sapply(results, function(x) round(x$p_value, 4))
+)
+print(results_df)
+
+
+```
+
+
+
+(Ultrametric Test)  Forced-Ultrametric Tree --> Simulated Brownian-Motion (BM) model (Phylogeny with 22 strains)
+```{r, message=FALSE, warning=FALSE, echo=TRUE, results="hide"}
+# Distribution of Test Statistic as percentage of BM increases
+set.seed(42)
+tr_subset_ultra <- force.ultrametric(tr_subset, method = "nnls") # nnls or extend
+plot(tr_subset_ultra)
+tr_subset_ultra$edge.length[tr_subset_ultra$edge.length <= 0] <- 1e-6
+
+
+p <- ggtree(tr_subset_ultra) +
+  geom_rootedge(rootedge = 0.05, colour = "black", linewidth = 1) +
+  geom_tiplab(size = 4) +
+  xlim(NA, 0.75)
+p
+
+phylosim <- phyloSim(tree = tr_subset_ultra, methods = c("I", "Lambda"), model = "BM", pb = FALSE)
+```
+
+```{r, message=FALSE, warning=FALSE, echo=TRUE}
+mean(phylosim$sim.stat[1, 1, ])  # I at 0% BM 
+mean(phylosim$sim.stat[1, 2, ])   # Lambda at 0% BM 
+
+plot(phylosim, stacked.methods = FALSE, quantiles = c(0, 1), ylab = "Phylogenetic Signal Value")
+plot.phylosim(phylosim, what = "pval", stacked.methods = TRUE)
+
+set.seed(42)
+# Simulated traits along Brownian Motion given phylogenetic tree 
+bm_raw <- rTraitCont(tr_subset_ultra, model = "BM")
+# Normalize to 0-1 range for comparison with growth rate data 
+bm <- (bm_raw - min(bm_raw)) / (max(bm_raw) - min(bm_raw))
+
+dat_growth_rate <- data.frame(
+  growth_rate = gr_vector[match(tip_labels, names(gr_vector))],   
+  random      = random,
+  bm          = bm
+  
+)
+rownames(dat_growth_rate) <- tip_labels
+p4d_growth_rate <- phylo4d(tr_subset_ultra, dat_growth_rate)
+# Trait Distribution
+barplot.phylo4d(p4d_growth_rate, tree.type = "phylo", tree.ladderize = TRUE, center = FALSE, scale = FALSE)
+# Z-scores 
+barplot.phylo4d(p4d_growth_rate, tree.type = "phylo", tree.ladderize = TRUE)
+
+phyloSignal(p4d = p4d_growth_rate, methods = c("I", "Lambda"))
+
+growth_rate.crlg <- phyloCorrelogram(p4d_growth_rate, trait = "growth_rate")
+random.crlg <- phyloCorrelogram(p4d_growth_rate, trait = "random")
+bm.crlg <- phyloCorrelogram(p4d_growth_rate, trait = "bm")
+
+plot(bm.crlg, main = "Brownian Motion Simulation (Strong Signal)")
+plot(random.crlg, main = "Random Trait (No Signal)")
+plot(growth_rate.crlg, main = "Phenotypic Trait: Growth Rate")
+```
+
+Perform permutation test on Pagel's Lambda statistic 
+```{r, message=FALSE, warning=FALSE, echo=TRUE, results="hide"}
+# Extract tree + observed and simulated traits  
+tree <- as(p4d_growth_rate, "phylo")
+trait_data <- p4d_growth_rate@data  # (growth_rate, random, bm)
+trait_names <- colnames(trait_data)
+
+# Number of permutations
+n_perm <- 1000
+set.seed(42)
+
+# Store results for all traits
+results <- list()
+
+# Loop through each trait
+for(j in 1:ncol(trait_data)) {
+  trait <- trait_data[[j]]
+  trait_name <- trait_names[j]
+  
+  cat("\n---", trait_name, "---\n")
+  
+ # Pagel's λ  
+  obs_lambda <- phylosig(tree, trait, method = "lambda")$lambda
+  
+  # Generate null distribution using 1000 permutations of trait data
+  lambda_null <- numeric(n_perm)
+  for(i in 1:n_perm) {
+    shuffled_trait <- sample(trait)
+    lambda_null[i] <- phylosig(tree, shuffled_trait, method = "lambda")$lambda
+  }
+  
+  # right-tailed (We reject H₀ if observed λ is unexpectedly large i.e. right tail)
+  p_val <- mean(lambda_null >= obs_lambda)
+  
+  results[[trait_name]] <- list(
+    obs_lambda = obs_lambda,
+    p_value = p_val,
+    null_dist = lambda_null
+  )
+  
+  cat("Observed λ =", round(obs_lambda, 4), "\n")
+  cat("p-value =", round(p_val, 4), "\n")
+}
+
+```
+
+```{r, message=FALSE, warning=FALSE, echo=TRUE}
+# Plot null distribution 
+par(mfrow=c(1,3), mar=c(4,4,2,1))
+for(trait_name in names(results)) {
+  res <- results[[trait_name]]
+  dens <- density(res$null_dist)
+  
+  plot(dens, main=trait_name, xlab="λ", lwd=2, 
+       xlim=c(0,1), ylim=c(0,max(dens$y)*1.2))
+  abline(v=res$obs_lambda, col="red", lwd=3, lty=2)
+  
+  # Shade area beyond observed
+  x_tail <- seq(res$obs_lambda, 1, len=100)
+  y_tail <- approx(dens$x, dens$y, xout=x_tail)$y
+  polygon(c(res$obs_lambda, x_tail, 1), c(0, y_tail, 0), 
+          col=rgb(1,0,0,0.3), border=NA)
+}
+
+# Print Results 
+results_df <- data.frame(
+  trait = trait_names,
+  lambda = sapply(results, function(x) round(x$obs_lambda, 4)),
+  p_value = sapply(results, function(x) round(x$p_value, 4))
+)
+print(results_df)
+
+
+```

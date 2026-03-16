@@ -1,0 +1,540 @@
+---
+title: "(UPDATED) Testing Phylogenetic Signal in Phenotypic Data"
+author: "Spencer Toth"
+date: "`r Sys.Date()`"
+output:
+  pdf_document: default
+  html_document: default
+---
+```{r, message=FALSE, warning=FALSE}
+library(tidyverse)
+library(phylosignal)
+library(broom)
+library(rstatix)
+library(adephylo)
+library(ape)
+library(phylobase)
+library(formattable)
+library(corrplot)
+library(ggbeeswarm)
+library(cowplot)
+library(ggpubr)
+library(grid)
+library(gridGraphics)
+library(ggplot2)
+library(readr) 
+library(dplyr)
+library(tidyr)
+library(patchwork)
+library(phytools)
+`%!in%` <- negate(`%in%`)
+```
+
+## Prepare data for analysis 
+Import phenotype and phylogenetic tree data
+```{r, message=FALSE, warning=FALSE, echo=TRUE}
+
+# Import phenotypic data
+
+# Growth Rates
+carrying_capacity_data_file <- read_csv("../formatted_phenotype_data/carrying_capacity.csv")
+growth_rate_data_file <- read_csv("../formatted_phenotype_data/growth_rate.csv")
+
+# Biofilm formation
+percent_biofilm_od_data_file  <- read_csv("../formatted_phenotype_data/percent_biofilm_od.csv")
+safranin_od_data_file <- read_csv("../formatted_phenotype_data/safranin_od.csv")
+
+# Growth over pH
+pH_growth_data_file <- read_csv("../formatted_phenotype_data/pH_growth.csv")
+
+# Metronidazole pH
+metro_mic_DF <- read_csv("../metronidazole_mic/data/strainMICs.csv")
+
+# Import phylogenetic tree 
+tr <- read.tree("/Users/spencertoth/Desktop/research_ongoing/gardnerella_phylogenetic_signal/gardnerella_pathogenic_phenotypes_1_17_2026/RAxML_bestTree.gardTree")
+
+# Rename tree nodes to match strain names in strain-phenotype data 
+numeric_tips <- tr$tip.label[tr$tip.label %in% c("101", "5-1")]
+tr$tip.label[match(numeric_tips, tr$tip.label)] <- paste0("Gv", numeric_tips)
+tr$tip.label[tr$tip.label == "14018"] <- "S14018"
+tip_labels <- tr$tip.label
+```
+
+Average the phenotype values across technical replicates per strain  
+```{r, message=FALSE, warning=FALSE, echo=TRUE}
+carrying_capacity_data <- carrying_capacity_data_file %>%
+  mutate(Strain = as.character(Strain)) %>%
+  group_by(Strain) %>% summarise(mean_maxOD = mean(maxOD, na.rm = TRUE))
+cc_vector <- setNames(carrying_capacity_data$mean_maxOD, carrying_capacity_data$Strain)
+cc_range <- range(cc_vector, na.rm = TRUE)
+# Carrying Capacity: CV amongst strains 
+cc_cv_between <- (sd(cc_vector) / mean(cc_vector)) 
+cat("CV of Carrying Capacity (max OD600) Across Strains: ", cc_cv_between, "\n")
+
+
+growth_rate_data <- growth_rate_data_file %>%
+  mutate(Strain = as.character(Strain)) %>%
+  group_by(Strain) %>% summarise(mean_mSlope = mean(mSlope, na.rm = TRUE))
+gr_vector <- setNames(growth_rate_data$mean_mSlope, growth_rate_data$Strain)
+gr_range <- range(gr_vector, na.rm = TRUE)
+# Growth rate: CV amongst strains 
+gr_cv_between <- (sd(gr_vector) / mean(gr_vector)) 
+cat("CV of Exponential Growth Rate Across Strains: ", gr_cv_between, "\n")
+
+# Transform percent_biofilm by applying asin(sqrt(x))
+percent_biofilm_od_data <- percent_biofilm_od_data_file %>%
+  mutate(Strain = as.character(Strain),
+         arcsq_mPercentOD = asin(sqrt(mPercentOD/100))) %>%
+  group_by(Strain) %>% 
+  summarise(mean_arcsq_mPercentOD = mean(arcsq_mPercentOD, na.rm = TRUE))   
+pb_vector <- setNames(percent_biofilm_od_data$mean_arcsq_mPercentOD, percent_biofilm_od_data$Strain)
+pb_range <- range(pb_vector, na.rm = TRUE)
+# Percent Biofilm: CV amongst strains 
+pb_cv_between <- (sd(pb_vector) / mean(pb_vector)) 
+cat("CV of % Biofilm Across Strains: ", pb_cv_between, "\n") 
+
+
+safranin_od_data <- safranin_od_data_file %>%
+  mutate(Strain = as.character(Strain)) %>%
+  group_by(Strain) %>% summarise(mean_mSafOD = mean(mSafOD, na.rm = TRUE))
+sf_vector <- setNames(safranin_od_data$mean_mSafOD, safranin_od_data$Strain)
+sf_range <- range(sf_vector, na.rm = TRUE)
+# Safranin: CV amongst strains 
+sf_cv_between <- (sd(sf_vector) / mean(sf_vector)) 
+cat("CV of Safranin OD600 Across Strains: ", sf_cv_between, "\n") 
+```
+
+Using t-test to identify the minimum pH value where non-zero growth (>0.01) occurred for each strain
+```{r, message=FALSE, warning=FALSE, echo=TRUE}
+pH_growth_data <- pH_growth_data_file %>%
+  group_by(Strain, pH) %>%
+  t_test(mOD ~ 1, mu = 0.01, alternative = "greater") %>%
+  add_significance("p") %>%
+  filter(p.signif != "ns") %>%
+  group_by(Strain) %>%
+  filter(pH == min(pH)) %>%
+  mutate(pH = as.numeric(pH))
+ph_vector <- setNames(pH_growth_data$pH, pH_growth_data$Strain)
+ph_range <- range(ph_vector, na.rm = TRUE)
+
+# Min pH: CV amongst strains 
+ph_cv <- (sd(ph_vector) / mean(ph_vector))  
+cat(ph_cv)  # CV across strains (%)
+```
+
+Rename complete-numeric strains  
+```{r, message=FALSE, warning=FALSE, echo=TRUE}
+# Strain 14018 not present in: pb_vector, sf_vector (did not pass QC for these experiments)
+vecs <- list(ph=ph_vector, cc=cc_vector, gr=gr_vector)
+vecs[] <- lapply(vecs, function(v) {
+  idx <- names(v) == "14018"   
+  if(any(idx)) names(v)[idx] <- "S14018"   
+  v
+})
+
+({cc_vector<<-vecs$cc; gr_vector<<-vecs$gr; ph_vector<<-vecs$ph})
+names(ph_vector)
+```
+
+## Update: "phylosignal" R-package used to conduct phylogenetic signal tests (Moran's I and Pagel’s lambda) 
+Subset phylogenetic tree to the strains with phenotype information 
+```{r, message=FALSE, warning=FALSE, echo=TRUE}
+# Phenotypes with all 22 strains: carrying capacity, growth rate and minimum pH
+data_tips <- intersect(names(ph_vector), tr$tip.label)   
+tr_subset <- keep.tip(tr, data_tips)
+tip_labels <- tr_subset$tip.label
+n_strains <- length(tip_labels) # 22
+
+## Phenotypes with 21 strains (missing strain 14018): percent biofilm and safranin phenotypes 
+data_tips <- intersect(names(pb_vector), tr$tip.label)  
+tr_subset_2 <- keep.tip(tr, data_tips)
+tip_labels_2 <- tr_subset_2$tip.label # missing strain 14018
+n_strains_2 <- length(tip_labels_2) # 21
+```
+
+Edit plot_phylosim: mean --> median 
+```{r, message=FALSE, warning=FALSE, echo=FALSE}
+my_plot_phylosim <- function (x, what = c("stat", "pval"), stacked.methods = FALSE, 
+    quantiles = c(0.05, 0.95), col = 1:5, legend = TRUE, ...) 
+{
+    what <- match.arg(what)
+    if (what == "stat") {
+        sim.stat <- x$sim.stat
+        nstat <- dim(sim.stat)[2]
+        sim.stat.median <- apply(sim.stat, c(1, 2), median, na.rm = T)
+        ylim <- c(-0.5, 1.5)
+        xlim <- c(0, 100)
+        if (!is.null(quantiles)) {
+            sim.stat.qmin <- apply(sim.stat, c(1, 2), quantile, 
+                probs = min(quantiles), na.rm = TRUE)
+            sim.stat.qmax <- apply(sim.stat, c(1, 2), quantile, 
+                probs = max(quantiles), na.rm = TRUE)
+            ylim <- c(-0.5, 1.5)
+        }
+        gcol <- rgb(t(col2rgb(col)), alpha = 40, maxColorValue = 255)
+        if (stacked.methods) {
+            plot(0, 0, type = "n", xlim = xlim, ylim = ylim, 
+                xlab = "Brownian Motion (%)", ylab = "Statistics values")
+            if (legend) {
+                legend(x = "topleft", legend = x$stat.names, 
+                  lty = c(1, 1), col = col)
+            }
+            if (!is.null(quantiles)) {
+                for (i in 1:nstat) {
+                  polygon(c(0:100, 100:0), c(sim.stat.qmin[, 
+                    i], rev(sim.stat.qmax[, i])), border = NA, 
+                    col = gcol[i])
+                }
+            }
+            for (i in 1:nstat) {
+                lines(0:100, sim.stat.median[, i], col = col[i], 
+                  lwd = 2)
+            }
+        }
+        else {
+            par(mfrow = c(1, nstat))
+            for (i in 1:nstat) {
+                plot(0, 0, type = "n", xlim = xlim, ylim = ylim, 
+                  xlab = "Brownian Motion (%)", ylab = "Statistic values", 
+                  main = x$stat.names[i])
+                if (!is.null(quantiles)) {
+                  polygon(c(0:100, 100:0), c(sim.stat.qmin[, 
+                    i], rev(sim.stat.qmax[, i])), border = NA, 
+                    col = gcol[i])
+                }
+                lines(0:100, sim.stat.median[, i], col = col[i], 
+                  lwd = 2)
+            }
+            par(mfrow = c(1, 1))
+        }
+    }
+    if (what == "pval") {
+        sim.pvalue <- x$sim.pvalue
+        nstat <- dim(sim.pvalue)[2]
+        sim.pvalue.frq <- apply(sim.pvalue, c(1, 2), function(x) sum(na.omit(x) < 
+            0.05)/length(na.omit(x)))
+        ylim <- c(0, 1)
+        xlim <- c(0, 100)
+        gcol <- rgb(t(col2rgb(col)), alpha = 40, maxColorValue = 255)
+        if (stacked.methods) {
+            plot(0, 0, type = "n", xlim = xlim, ylim = ylim, 
+                xlab = "Brownian Motion (%)", ylab = "Freq. pvalues < 0.05")
+            if (legend) {
+                legend(x = "topleft", legend = x$stat.names, 
+                  lty = c(1, 1), col = col)
+            }
+            for (i in 1:nstat) {
+                lines(0:100, sim.pvalue.frq[, i], col = col[i], 
+                  lwd = 2)
+            }
+        }
+        else {
+            par(mfrow = c(1, nstat))
+            for (i in 1:nstat) {
+                plot(0, 0, type = "n", xlim = xlim, ylim = ylim, 
+                  xlab = "Brownian Motion (%)", ylab = "Freq. pvalues < 0.05", 
+                  main = x$stat.names[i])
+                lines(0:100, sim.pvalue.frq[, i], col = col[i], 
+                  lwd = 2)
+            }
+            par(mfrow = c(1, 1))
+        }
+    }
+}
+
+```
+
+
+
+Simulated Brownian-Motion (BM) model (Phylogeny with 22 strains)
+```{r, message=FALSE, warning=FALSE, echo=TRUE, results = 'hide'}
+# Distribution of Test Statistic as percentage of BM increases
+phylosim <- phyloSim(tree = tr_subset, methods = c("I", "Lambda"), model = "BM")
+#my_plot_phylosim(phylosim, stacked.methods = FALSE, quantiles = c(0, 1), ylab = "Phylogenetic Signal Value")
+plot(phylosim, stacked.methods = FALSE, quantiles = c(0, 1), ylab = "Phylogenetic Signal Value")
+
+plot.phylosim(phylosim, what = "pval", stacked.methods = TRUE)
+```
+Simulated Brownian-Motion (BM) model (Phylogeny with 22 strains): Forced-Ultrametric Tree
+```{r, message=FALSE, warning=FALSE, echo=FALSE}
+# Distribution of Test Statistic as percentage of BM increases
+plot(tr_subset)
+is.ultrametric(tr_subset)
+phylosim <- phyloSim(tree = tr_subset, methods = c("I", "Lambda"), model = "BM", pb = FALSE)
+plot(phylosim, stacked.methods = FALSE, quantiles = c(0, 1), ylab = "Phylogenetic Signal Value")
+#plot.phylosim(phylosim, what = "pval", stacked.methods = TRUE)
+
+tr_subset_ultra <- force.ultrametric(tr_subset, method = "nnls") # nnls or extend
+plot(tr_subset_ultra)
+is.ultrametric(tr_subset_ultra)
+tr_subset_ultra$edge.length[tr_subset_ultra$edge.length <= 0] <- 1e-6
+phylosim <- phyloSim(tree = tr_subset_ultra, methods = c("I", "Lambda"), model = "BM", pb = FALSE)
+plot(phylosim, stacked.methods = FALSE, quantiles = c(0, 1), ylab = "Phylogenetic Signal Value")
+#plot.phylosim(phylosim, what = "pval", stacked.methods = TRUE)
+
+#my_plot_phylosim(phylosim, stacked.methods = FALSE, quantiles = c(0, 1), ylab = "Phylogenetic Signal Value")
+```
+
+## Carrying capacity:
+(Original) R-package ape: Conduct Moran's I test
+
+Generate weighted matrix from full phylogenetic tree (99 nodes = 22 strains and references) 
+```{r, message=FALSE, warning=FALSE, echo=TRUE}
+# (Weights as $_{wij} = 1/d_{ij}$ , where the d’s is the distances measured on the tree)  
+w <- 1 / cophenetic(tr)
+diag(w) <- 0  
+```
+Subset full weighted matrix to get strains in phenotype vector and conduct Moran's I test
+```{r, message=FALSE, warning=FALSE, eval=TRUE, echo=TRUE}
+W <- w[rownames(w) %in% names(ph_vector), colnames(w) %in% names(ph_vector)]
+strain_order <- sort(names(ph_vector)) # make sure matrix is same order as vector 
+ph_vector <- ph_vector[strain_order]
+setdiff(names(ph_vector), rownames(W))
+W_sorted <- W[strain_order, strain_order] 
+
+Moran.I(cc_vector, W_sorted) 
+```
+
+(Updated) R-package phylosignal: Conduct Moran's I and Pagel's Lambda tests 
+```{r, message=FALSE, warning=FALSE, eval=TRUE, echo=TRUE}
+# Includes two simulations (random and BM) in addition to observed phenotype 
+dat_carrying_capacity <- data.frame(
+  carrying_capacity = cc_vector[match(tip_labels, names(cc_vector))],   
+  random           = rnorm(length(tip_labels)),
+  bm               = rTraitCont(tr_subset, model = "BM")
+)
+rownames(dat_carrying_capacity) <- tip_labels
+p4d_carrying_capacity <- phylo4d(tr_subset, dat_carrying_capacity)
+barplot.phylo4d(p4d_carrying_capacity, tree.type = "phylo", tree.ladderize = TRUE)
+
+phyloSignal(p4d = p4d_carrying_capacity, methods = c("I", "Lambda")) 
+```
+
+Compute  phylogenetic correlogram
+```{r, message=FALSE, warning=FALSE, eval=TRUE, echo=TRUE}
+carrying_capacity.crlg <- phyloCorrelogram(p4d_carrying_capacity, trait = "carrying_capacity")
+random.crlg <- phyloCorrelogram(p4d_carrying_capacity, trait = "random")
+bm.crlg <- phyloCorrelogram(p4d_carrying_capacity, trait = "bm")
+
+plot(bm.crlg, main = "Brownian Motion Simulation (Strong Signal)")
+plot(random.crlg, main = "Random Trait (No Signal)")
+plot(carrying_capacity.crlg, main = "Phenotypic Trait: Carrying Capacity")
+```
+
+Local Indicator of Phylogenetic Association (LIPA)
+```{r, message=FALSE, warning=FALSE, eval=TRUE, echo=TRUE}
+carrying_capacity.lipa <- lipaMoran(p4d_carrying_capacity)
+carrying_capacity.lipa.p4d <- lipaMoran(p4d_carrying_capacity, as.p4d = TRUE)
+
+barplot.phylo4d(p4d_carrying_capacity, bar.col = (carrying_capacity.lipa$p.value < 0.05) + 1, 
+                center = FALSE, scale = FALSE)
+barplot.phylo4d(carrying_capacity.lipa.p4d, bar.col = (carrying_capacity.lipa$p.value < 0.05) + 1, 
+                center = FALSE, scale = FALSE)
+```
+
+## Growth rate:
+  
+(Original) R-package ape: Conduct Moran's I   
+```{r, message=FALSE, warning=FALSE, eval=TRUE, echo=TRUE}
+W <- w[rownames(w) %in% names(ph_vector), colnames(w) %in% names(ph_vector)]
+strain_order <- sort(names(ph_vector)) # make sure matrix is same order as vector 
+ph_vector <- ph_vector[strain_order]
+setdiff(names(ph_vector), rownames(W))
+W_sorted <- W[strain_order, strain_order] 
+
+Moran.I(gr_vector, W_sorted) 
+  
+``` 
+
+(Updated) R-package phylosignal: Conduct Moran's I and Pagel's Lambda tests  
+```{r, message=FALSE, warning=FALSE, eval=TRUE, echo=TRUE}
+# On carrying capacity phenotype dataset and random & BM simulated datasets 
+dat_growth_rate <- data.frame(
+  growth_rate = gr_vector[match(tip_labels, names(gr_vector))],   
+  random      = rnorm(n_strains),
+  bm          = rTraitCont(tr_subset, model = "BM")
+)
+rownames(dat_growth_rate) <- tip_labels
+p4d_growth_rate <- phylo4d(tr_subset, dat_growth_rate)
+barplot.phylo4d(p4d_growth_rate, tree.type = "phylo", tree.ladderize = TRUE)
+
+phyloSignal(p4d = p4d_growth_rate, methods = c("I", "Lambda"))
+```
+
+Computes a phylogenetic correlogram
+```{r, message=FALSE, warning=FALSE, eval=TRUE, echo=TRUE}
+growth_rate.crlg <- phyloCorrelogram(p4d_growth_rate, trait = "growth_rate")
+random.crlg <- phyloCorrelogram(p4d_growth_rate, trait = "random")
+bm.crlg <- phyloCorrelogram(p4d_growth_rate, trait = "bm")
+
+plot(bm.crlg, main = "Brownian Motion Simulation (Strong Signal)")
+plot(random.crlg, main = "Random Trait (No Signal)")
+plot(growth_rate.crlg, main = "Phenotypic Trait: Growth Rate")
+```
+
+Local Indicator of Phylogenetic Association (LIPA)
+```{r, message=FALSE, warning=FALSE, eval=TRUE, echo=TRUE}
+growth_rate.lipa <- lipaMoran(p4d_growth_rate)
+growth_rate.lipa.p4d <- lipaMoran(p4d_growth_rate, as.p4d = TRUE)
+
+barplot.phylo4d(p4d_growth_rate, bar.col = (growth_rate.lipa$p.value < 0.05) + 1, 
+                center = FALSE, scale = FALSE)
+barplot.phylo4d(growth_rate.lipa.p4d, bar.col = (growth_rate.lipa$p.value < 0.05) + 1, 
+                center = FALSE, scale = FALSE)
+              
+```
+
+## Minimum pH Growth: 
+(Updated) R-package phylosignal: Conduct Moran's I and Pagel's Lambda tests  
+```{r, message=FALSE, warning=FALSE, eval=TRUE, echo=TRUE}
+# On carrying capacity phenotype dataset and random & BM simulated datasets 
+dat_pH_growth <- data.frame(
+  pH_growth = ph_vector[match(tip_labels, names(ph_vector))], 
+  random    = rnorm(n_strains),
+  bm        = rTraitCont(tr_subset, model = "BM")
+)
+rownames(dat_pH_growth) <- tip_labels
+p4d_pH_growth <- phylo4d(tr_subset, dat_pH_growth)
+barplot.phylo4d(p4d_pH_growth, tree.type = "phylo", tree.ladderize = TRUE)
+
+phyloSignal(p4d = p4d_pH_growth, methods = c("I", "Lambda"))
+```
+
+Computes a phylogenetic correlogram
+```{r, message=FALSE, warning=FALSE, eval=TRUE, echo=TRUE}
+pH_growth.crlg <- phyloCorrelogram(p4d_pH_growth, trait = "pH_growth")
+random.crlg <- phyloCorrelogram(p4d_pH_growth, trait = "random")
+bm.crlg <- phyloCorrelogram(p4d_pH_growth, trait = "bm")
+
+plot(bm.crlg, main = "Brownian Motion Simulation (Strong Signal)")
+plot(random.crlg, main = "Random Trait (No Signal)")
+plot(pH_growth.crlg, main = "Phenotypic Trait: pH Growth")
+```
+
+Local Indicator of Phylogenetic Association (LIPA)
+```{r, message=FALSE, warning=FALSE, eval=TRUE, echo=TRUE}
+pH_growth.lipa <- lipaMoran(p4d_pH_growth)
+pH_growth.lipa.p4d <- lipaMoran(p4d_pH_growth, as.p4d = TRUE)
+
+barplot.phylo4d(p4d_pH_growth, bar.col = (pH_growth.lipa$p.value < 0.05) + 1, 
+                center = FALSE, scale = FALSE)
+barplot.phylo4d(pH_growth.lipa.p4d, bar.col = (pH_growth.lipa$p.value < 0.05) + 1, 
+                center = FALSE, scale = FALSE)
+```
+
+
+## Percent Biofilm OD: 
+(Updated) R-package phylosignal: Conduct Moran's I and Pagel's Lambda tests  
+```{r, message=FALSE, warning=FALSE, eval=TRUE, echo=TRUE}
+# On carrying capacity phenotype dataset and random & BM simulated datasets 
+dat_percent_biofilm_od <- data.frame(
+  percent_biofilm_od = pb_vector[match(tip_labels_2, names(pb_vector))], 
+  random             = rnorm(n_strains_2),
+  bm                 = rTraitCont(tr_subset_2, model = "BM")
+)
+rownames(dat_percent_biofilm_od) <- tip_labels_2
+p4d_percent_biofilm_od <- phylo4d(tr_subset_2, dat_percent_biofilm_od)
+barplot.phylo4d(p4d_percent_biofilm_od, tree.type = "phylo", tree.ladderize = TRUE)
+
+phyloSignal(p4d = p4d_percent_biofilm_od, methods = c("I", "Lambda"))
+```
+
+Computes a phylogenetic correlogram
+```{r, message=FALSE, warning=FALSE, eval=TRUE, echo=TRUE}
+percent_biofilm_od.crlg <- phyloCorrelogram(p4d_percent_biofilm_od, trait = "percent_biofilm_od")
+random.crlg <- phyloCorrelogram(p4d_percent_biofilm_od, trait = "random")
+bm.crlg <- phyloCorrelogram(p4d_percent_biofilm_od, trait = "bm")
+
+plot(bm.crlg, main = "Brownian Motion Simulation (Strong Signal)")
+plot(random.crlg, main = "Random Trait (No Signal)")
+plot(percent_biofilm_od.crlg, main = "Phenotypic Trait: Percent Biofilm OD")
+```
+  
+Local Indicator of Phylogenetic Association (LIPA)
+```{r, message=FALSE, warning=FALSE, eval=TRUE, echo=TRUE}
+percent_biofilm_od.lipa <- lipaMoran(p4d_percent_biofilm_od)
+percent_biofilm_od.lipa.p4d <- lipaMoran(p4d_percent_biofilm_od, as.p4d = TRUE)
+
+barplot.phylo4d(p4d_percent_biofilm_od, bar.col = (percent_biofilm_od.lipa$p.value < 0.05) + 1, 
+                center = FALSE, scale = FALSE)
+barplot.phylo4d(percent_biofilm_od.lipa.p4d, bar.col = (percent_biofilm_od.lipa$p.value < 0.05) + 1, 
+                center = FALSE, scale = FALSE)
+```
+
+## Safranin OD: 
+(Updated) R-package phylosignal: Conduct Moran's I and Pagel's Lambda tests
+```{r, message=FALSE, warning=FALSE, eval=TRUE, echo=TRUE}
+# On carrying capacity phenotype dataset and random & BM simulated datasets 
+dat_safranin_od <- data.frame(
+  safranin_od = sf_vector[match(tip_labels_2, names(sf_vector))], 
+  random      = rnorm(n_strains_2),
+  bm          = rTraitCont(tr_subset_2, model = "BM")
+)
+rownames(dat_safranin_od) <- tip_labels_2
+p4d_safranin_od <- phylo4d(tr_subset_2, dat_safranin_od)
+barplot.phylo4d(p4d_safranin_od, tree.type = "phylo", tree.ladderize = TRUE)
+
+phyloSignal(p4d = p4d_safranin_od, methods = c("I", "Lambda"))
+```
+
+Computes a phylogenetic correlogram
+```{r, message=FALSE, warning=FALSE, eval=TRUE, echo=TRUE}
+safranin_od.crlg <- phyloCorrelogram(p4d_safranin_od, trait = "safranin_od")
+random.crlg <- phyloCorrelogram(p4d_safranin_od, trait = "random")
+bm.crlg <- phyloCorrelogram(p4d_safranin_od, trait = "bm")
+
+plot(bm.crlg, main = "Brownian Motion Simulation (Strong Signal)")
+plot(random.crlg, main = "Random Trait (No Signal)")
+plot(safranin_od.crlg, main = "Phenotypic Trait: Safranin OD")
+```
+
+Local Indicator of Phylogenetic Association (LIPA)
+```{r, message=FALSE, warning=FALSE, eval=TRUE, echo=TRUE}
+safranin_od.lipa <- lipaMoran(p4d_safranin_od)
+safranin_od.lipa.p4d <- lipaMoran(p4d_safranin_od, as.p4d = TRUE)
+
+barplot.phylo4d(p4d_safranin_od, bar.col = (safranin_od.lipa$p.value < 0.05) + 1, 
+                center = FALSE, scale = FALSE)
+barplot.phylo4d(safranin_od.lipa.p4d, bar.col = (safranin_od.lipa$p.value < 0.05) + 1, 
+                center = FALSE, scale = FALSE)
+```
+
+
+## ADDITIONAL NOTES: Revised method for generating the Moran's I weighted matrix 
+Edit: Sorted phylogenetic matrix so strain names are the same order as phenotype vector to ensure accurate Moran's I calculation  
+
+(Original): Subset full weighted matrix (99 strains total) to get strains in phenotype vector (22 strains total) (example: minimum pH)
+```{r, message=FALSE, warning=FALSE, echo=TRUE}
+# w is the previously defined matrix from the full phylogenetic tree
+W <- w[rownames(w) %in% names(ph_vector), colnames(w) %in% names(ph_vector)]
+
+# Check 
+length(ph_vector) == nrow(W)  # Must be TRUE (number of strains is the same in vector and matrix)
+all(names(ph_vector) == rownames(W))  # Must be TRUE, if FALSE the order of strains is NOT the same in phenotype vector and phylogenetic matrix)
+setdiff(rownames(W), names(ph_vector))  # Should be empty (i.e. same strain names in matrix and vector)
+
+# Show misalignment between vector and matrix
+cat("ph_vector[1:3] =", head(names(ph_vector), 5), "\n")
+cat("W (unsorted) rows[1:3] =", head(rownames(W), 5), "\n")
+
+# Calculate Moran's I using unsorted weighted matrix (Example: Minimum pH)
+Moran.I(ph_vector, W)  
+```
+
+(Updated): After subsetting, ensure order of the names of the phylogenetic matrix and the phenotype vector match  
+```{r, message=FALSE, warning=FALSE, echo=TRUE}
+strain_order <- sort(names(ph_vector)) 
+ph_vector <- ph_vector[strain_order]
+W_sorted <- W[strain_order, strain_order]  
+
+# Check 
+length(ph_vector) == nrow(W_sorted)  # Must be TRUE (number of values is the same in vector and matrix)
+all(names(ph_vector) == rownames(W_sorted))  # Must be TRUE (order of values is the same in vector and matrix)
+setdiff(rownames(W_sorted), names(ph_vector))  # Should be empty (i.e. same strain names in matrix and vector)
+
+# Show correct alignment of vector and matrix 
+cat("W_clean rows[1:3] =", head(rownames(W_sorted), 5), "\n")
+
+# Calculate Moran's I using sorted weighted matrix (Example: Minimum pH)
+Moran.I(ph_vector, W_sorted)  
+```
