@@ -101,7 +101,7 @@ safranin_od_data <- safranin_od_data_file %>%
 sf_vector <- setNames(safranin_od_data$mean_mSafOD, safranin_od_data$Strain)
 ```
 
-## Subset phylogenetic tree to the strains with phenotype information, and perform force.ultrametric() 
+## Subset phylogenetic tree to the strains with phenotype information, and perform chronoMPL() 
 ```{r, message=FALSE, warning=FALSE, echo=TRUE}
 # Phylogeny with 22 strains: carrying capacity, growth rate and minimum pH
 data_tips <- intersect(names(gr_vector), tr$tip.label)  
@@ -117,7 +117,8 @@ tr_subset_plot <- ggtree(tr_subset) +
   xlim(NA, 0.75)
 tr_subset_plot
 
-tr_subset_ultra <- force.ultrametric(tr_subset, method = "nnls") # nnls or extend
+#tr_subset_ultra <- force.ultrametric(tr_subset, method = "nnls") # nnls or extend
+tr_subset_ultra <- chronoMPL(tr_subset)  
 tr_subset_ultra$edge.length[tr_subset_ultra$edge.length <= 0] <- 1e-6
 
 # Plot ultrametric tree
@@ -127,14 +128,13 @@ tr_subset_ultra_plot <- ggtree(tr_subset_ultra) +
   xlim(NA, 0.75)
 tr_subset_ultra_plot
 
-
 # Phylogeny with 21 strains: safranin and % biofilm 
 data_tips_02 <- intersect(names(sf_vector), tr$tip.label)  
 tr_subset_02  <- keep.tip(tr, data_tips_02)
 tip_labels_02 <- tr_subset_02$tip.label
 n_strains_02 <- length(tip_labels_02)    
 
-tr_subset_ultra_02 <- force.ultrametric(tr_subset_02, method = "nnls") # nnls or extend
+tr_subset_ultra_02 <- chronoMPL(tr_subset_02) 
 tr_subset_ultra_02$edge.length[tr_subset_ultra_02$edge.length <= 0] <- 1e-6
 ``` 
 
