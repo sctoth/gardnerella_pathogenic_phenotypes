@@ -268,7 +268,7 @@ trait_data <- p4d_growth_rate_ultra@data  # (growth_rate, random, bm)
 trait_names <- colnames(trait_data)
 
 # Number of permutations
-n_perm <- 1000
+n_perm <- 999
 set.seed(42)
 
 # Store results for all traits
@@ -284,7 +284,7 @@ for(j in 1:ncol(trait_data)) {
  # Pagel's λ  
   obs_lambda <- phylosig(tree, trait, method = "lambda")$lambda
   
-  # Generate null distribution using 1000 permutations of trait data
+  # Generate null distribution using 999 permutations of trait data
   lambda_null <- numeric(n_perm)
   for(i in 1:n_perm) {
     shuffled_trait <- sample(trait)
@@ -448,7 +448,7 @@ trait_data <- p4d_carrying_capacity_ultra@data
 trait_names <- colnames(trait_data)
 
 # Number of permutations
-n_perm <- 1000
+n_perm <- 999
 set.seed(42)
 
 # Store results for all traits
@@ -464,7 +464,7 @@ for(j in 1:ncol(trait_data)) {
  # Pagel's λ  
   obs_lambda <- phylosig(tree, trait, method = "lambda")$lambda
   
-  # Generate null distribution using 1000 permutations of trait data
+  # Generate null distribution using 999 permutations of trait data
   lambda_null <- numeric(n_perm)
   for(i in 1:n_perm) {
     shuffled_trait <- sample(trait)
@@ -630,7 +630,7 @@ trait_data <- p4d_percent_biofilm_ultra@data
 trait_names <- colnames(trait_data)
 
 # Number of permutations
-n_perm <- 1000
+n_perm <- 999
 set.seed(42)
 
 # Store results for all traits
@@ -646,7 +646,7 @@ for(j in 1:ncol(trait_data)) {
  # Pagel's λ  
   obs_lambda <- phylosig(tree, trait, method = "lambda")$lambda
   
-  # Generate null distribution using 1000 permutations of trait data
+  # Generate null distribution using 999 permutations of trait data
   lambda_null <- numeric(n_perm)
   for(i in 1:n_perm) {
     shuffled_trait <- sample(trait)
@@ -806,7 +806,7 @@ trait_data <- p4d_safranin_ultra@data  # (growth_rate, random, bm)
 trait_names <- colnames(trait_data)
 
 # Number of permutations
-n_perm <- 1000
+n_perm <- 999
 set.seed(42)
 
 # Store results for all traits
@@ -822,7 +822,7 @@ for(j in 1:ncol(trait_data)) {
  # Pagel's λ  
   obs_lambda <- phylosig(tree, trait, method = "lambda")$lambda
   
-  # Generate null distribution using 1000 permutations of trait data
+  # Generate null distribution using 999 permutations of trait data
   lambda_null <- numeric(n_perm)
   for(i in 1:n_perm) {
     shuffled_trait <- sample(trait)
