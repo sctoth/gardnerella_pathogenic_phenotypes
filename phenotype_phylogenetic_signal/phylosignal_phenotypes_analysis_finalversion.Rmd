@@ -30,6 +30,8 @@ library(patchwork)
 library(phytools)
 library(gridExtra)  
 library(knitr)
+library(gtsummary)
+library(gt)
 `%!in%` <- negate(`%in%`)
 ```
 
@@ -913,4 +915,100 @@ theme(
 grid.arrange(grobs = rank_plots, ncol = 3, top = "Pagel's λ Permutation Test: Rank Order Plots")
 
 
+```
+
+# Summary Table
+```{r, message=FALSE, warning=FALSE, echo=TRUE}
+library(gtsummary)
+library(gt)
+library(dplyr)
+library(tidyr)
+library(tibble)
+library(flextable)
+
+# optional: set a publication-style theme
+set_gtsummary_theme(theme_gtsummary_journal("jama"))
+set_gtsummary_theme(theme_gtsummary_compact())
+
+# build the data frame from your values
+phylo_tbl <-
+  tibble::tribble(
+    ~Phenotype,                       ~Pagels_lambda, ~lambda_p_LRT, ~lambda_p_perm, ~Morans_I, ~I_p_perm,
+    "Exponential Growth Rate",        0.000067,       1.000,         1.000,          0.0624,    0.107,
+    "Carrying Capacity",              0.000067,       1.000,         0.999,          -0.0525,   0.466,
+    "Biofilm Formation (% of Growth)",0.196,          0.596,         0.0911,         0.058,     0.148,
+    "Biofilm Density (Safranin OD450)",0.000067,      1.000,         1.000,          -0.0211,   0.330
+  )
+
+
+phylo_tbl %>%
+  transmute(
+    Phenotype,
+    `Pagel's λ` = Pagels_lambda,
+    `λ p LRT` = lambda_p_LRT,
+    `λ p perm` = lambda_p_perm,
+    `Moran's I` = Morans_I,
+    `I p perm` = I_p_perm
+  ) %>%
+  gt() %>%
+  tab_header(
+    title = md("Table 1. Phylogenetic Signal Test Results")
+  ) %>%
+  tab_style(
+    style = cell_borders(
+      sides = "bottom",
+      color = "black",
+      weight = px(2),
+      style = "solid"
+    ),
+    locations = cells_title(groups = "title")
+  ) %>%
+  cols_label(
+    Phenotype = md("Phenotype"),
+    `Pagel's λ` = md("Pagel’s λ"),
+    `λ p LRT` = md("p-value (LRT)"),
+    `λ p perm` = md("p-value (perm)"),
+    `Moran's I` = md("Moran’s I"),
+    `I p perm` = md("p-value (perm)")
+  ) %>%
+  tab_style(
+    style = cell_borders(
+      sides = "top",
+      color = "black",
+      weight = px(0.5),
+      style = "solid"
+    ),
+    locations = cells_column_labels()
+  ) %>%
+  tab_style(
+    style = cell_borders(
+      sides = "bottom",
+      color = "black",
+      weight = px(0.5),
+      style = "solid"
+    ),
+    locations = cells_column_labels()
+  ) %>%
+  tab_options(
+    table.font.size = px(12),
+
+    column_labels.font.size     = px(12),
+    column_labels.font.weight   = "normal",
+
+    heading.title.font.size     = px(12),
+    heading.title.font.weight   = "normal",
+
+    table_body.border.bottom.color = "black",
+    table_body.border.bottom.width = px(2),
+    table_body.border.bottom.style = "solid",
+
+    table.border.top.color    = "transparent",
+    table.border.top.width    = px(1),
+    table.border.bottom.color = "black",
+    table.border.bottom.width = px(1),
+
+    table.align = "left",
+    data_row.padding = px(4),
+    heading.align = "left"
+)  
 ```
