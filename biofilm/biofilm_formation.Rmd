@@ -1,7 +1,11 @@
 ---
-title: "Biofilm Formation"
+title: "Biofilm Formation of Gardnerella Strains"
 author: "Hanna Berman"
-output: html_document
+date: '`r format(Sys.Date(), "%B %d, %Y")`'
+output:
+  html_document:
+    toc: true
+    toc_float: true
 ---
 **Purpose:**
   To measure the capacity for each strain to grow as a biofilm
@@ -26,10 +30,9 @@ output: html_document
 
 ```{r, message=FALSE, warning=FALSE}
 library(tidyverse)
-#library(xlsx)
+library(openxlsx)
 library(broom)
 library(rstatix)
-library(ape)
 library(ggbeeswarm)
 library(formattable)
 library(ggpubr)
@@ -49,20 +52,41 @@ strains <- c("14018", "315-A", "C0011E4", "JCP7275", "C0084H9", "JCP8108", "JCP8
 
 strains0 <- c("14018", "315-A", "C0011E4", "JCP7275", "C0084H9", "JCP8108", "JCP8017B", "C0040C2" , "UM35",  "JCP8066", "C0093B3", "AMD", "C0096A1", "C0102A2",  "UM224", "5-1", "C0179B4", "C0056B5", "101", "C0100B2", "C0101A1", "CMW7778B")
 
-species <- c("Gardnerella vaginalis", "Gardnerella sp. 2", "Gardnerella sp. 3", "Gardnerella piotii", "Gardnerella leopoldii", "Gardnerella swidsinskii", "Gardnerella sp. 7", "Gardnerella sp. 8", "Gardnerella sp. 10", "Gardnerella sp. 11", "Gardnerella sp. 12")
+species <- c("Gardnerella vaginalis", "Gardnerella lacydonensis", "Gardnerella pickettii", "Gardnerella piotii", "Gardnerella leopoldii", "Gardnerella swidsinskii", "Gardnerella sp. 7", "Gardnerella greenwoodii", "Gardnerella sp. 10", "Gardnerella sp. 11", "Gardnerella sp. 12")
+speciesAbbrevs <- c("G. vag.", "G. lac.", "G. pic.", "G. pio.", "G. leo.", "G. swi.", "7", "G. gre.", "10", "11", "12")
 
 figureOut <- "../../experiments_figures"
-suppTableOut <- "../../experiments_figures/supplementary_posthoc_tables.xlsx"
+suppTableOut <- paste0("../../experiments_figures/", Sys.Date(), "_supplementary_posthoc_tables.xlsx")
 formattedPhenDataOut <- "../formatted_phenotype_data"
 ```
 
-  Import data 
+  Import data and add updated species names
 ```{r, message=FALSE, warning=FALSE}
-midlog_raw_data <- read_csv("./data/biofilm_midlog_raw_data.csv")
-rawPlanktonicODs <- read_csv("./data/planktonic_od_raw_data.csv")
-rawBiofilmODs <- read_csv("./data/biofilm_od_raw_data.csv")
-rawSafPlanktonicODs <- read_csv("./data/safranin_planktonic_raw_data.csv")
-rawSafBiofilmODs <- read_csv("./data/safranin_biofilm_raw_data.csv")
+midlog_raw_data <- read_csv("./data/biofilm_midlog_raw_data.csv")  %>%
+  mutate(Species=case_when(Species=="Gardnerella sp. 2"~"Gardnerella lacydonensis",
+                           Species=="Gardnerella sp. 3"~"Gardnerella pickettii",
+                           Species=="Gardnerella sp. 8"~"Gardnerella greenwoodii",
+                           Species %!in% c("Gardnerella sp. 2", "Gardnerella sp. 3", "Gardnerella sp. 8")~Species))
+rawPlanktonicODs <- read_csv("./data/planktonic_od_raw_data.csv")  %>%
+  mutate(Species=case_when(Species=="Gardnerella sp. 2"~"Gardnerella lacydonensis",
+                           Species=="Gardnerella sp. 3"~"Gardnerella pickettii",
+                           Species=="Gardnerella sp. 8"~"Gardnerella greenwoodii",
+                           Species %!in% c("Gardnerella sp. 2", "Gardnerella sp. 3", "Gardnerella sp. 8")~Species))
+rawBiofilmODs <- read_csv("./data/biofilm_od_raw_data.csv")  %>%
+  mutate(Species=case_when(Species=="Gardnerella sp. 2"~"Gardnerella lacydonensis",
+                           Species=="Gardnerella sp. 3"~"Gardnerella pickettii",
+                           Species=="Gardnerella sp. 8"~"Gardnerella greenwoodii",
+                           Species %!in% c("Gardnerella sp. 2", "Gardnerella sp. 3", "Gardnerella sp. 8")~Species))
+rawSafPlanktonicODs <- read_csv("./data/safranin_planktonic_raw_data.csv")  %>%
+  mutate(Species=case_when(Species=="Gardnerella sp. 2"~"Gardnerella lacydonensis",
+                           Species=="Gardnerella sp. 3"~"Gardnerella pickettii",
+                           Species=="Gardnerella sp. 8"~"Gardnerella greenwoodii",
+                           Species %!in% c("Gardnerella sp. 2", "Gardnerella sp. 3", "Gardnerella sp. 8")~Species))
+rawSafBiofilmODs <- read_csv("./data/safranin_biofilm_raw_data.csv")  %>%
+  mutate(Species=case_when(Species=="Gardnerella sp. 2"~"Gardnerella lacydonensis",
+                           Species=="Gardnerella sp. 3"~"Gardnerella pickettii",
+                           Species=="Gardnerella sp. 8"~"Gardnerella greenwoodii",
+                           Species %!in% c("Gardnerella sp. 2", "Gardnerella sp. 3", "Gardnerella sp. 8")~Species))
 ```
 
   Plot settings
@@ -327,7 +351,7 @@ percentODDF %>%
 ```{r, message=FALSE, warning=FALSE}
 ## annotation portions of plot
 #protocol bar
-protocolBar <- percentODDF %>%
+protocolBar0 <- percentODDF %>%
   select(Strain, Species, Protocol) %>%
   unique %>%
   ggplot() +
@@ -337,11 +361,27 @@ protocolBar <- percentODDF %>%
     theme(legend.position = "none")
 
 # species bar
-speciesBar <- percentODDF %>%
+# speciesBar0 <- percentODDF %>%
+#   select(Strain, Species, Protocol) %>%
+#   unique %>%
+#   ggplot() +
+#     geom_bar(aes(x=Strain, y=1, fill=Species), stat="identity", width=1.1) +
+#     speciesFill +
+#     theme_void() +
+#     theme(legend.position = "none")
+
+speciesBar0 <- setupDF %>%
   select(Strain, Species, Protocol) %>%
   unique %>%
+  mutate(Strain=factor(Strain, levels = strains),
+         Species=factor(Species, levels = species),
+         SpeciesLab=factor(Species, levels=species, labels=speciesAbbrevs)) %>%
+  with_groups(Species, mutate, num=rank(Strain)) %>%
+  mutate(SpeciesLab=case_when(num==1~SpeciesLab,
+                              num!=1~"")) %>%
   ggplot() +
     geom_bar(aes(x=Strain, y=1, fill=Species), stat="identity", width=1.1) +
+    geom_text(aes(x=Strain, y=0.5, label=SpeciesLab), color="white", hjust = 0.25, size=2) +
     speciesFill +
     theme_void() +
     theme(legend.position = "none")
@@ -358,45 +398,62 @@ percentODPlot <- percentODDF %>%
         strip.placement = "outside") +
   labs(x=NULL, y=NULL)
 
-ODPlots <- plot_grid(protocolBar, speciesBar, percentODPlot, ncol = 1, rel_heights = c(0.06, 0.06, 1), align = "v", axis = "lr")
+ODPlots <- plot_grid(protocolBar0, speciesBar0, percentODPlot, ncol = 1, rel_heights = c(0.06, 0.06, 1), align = "v", axis = "lr")
 ODPlots
 ```
 
 ## Compare Percent OD
 ### Isolate ANOVA
 ```{r, message=FALSE, warning=FALSE}
-strain_OD_DF <- percentODDF %>%
+strain_perc_OD_DF <- percentODDF %>%
   spread(measure, value) %>%
   select(-`Biofilm OD`, -`Planktonic OD`) %>%
   dplyr::rename(percentOD=`Percent OD`) %>%
-  with_groups(c(Sample, Species, Strain, Batch, BioRep), summarize, mPercentOD=mean(percentOD), sdPercentOD=sd(percentOD))
+  with_groups(c(Sample, Species, Strain, Batch, BioRep), summarize, mPercentOD=mean(percentOD), sdPercentOD=sd(percentOD)) %>%
+  select(Sample, Strain, Species, mPercentOD, sdPercentOD)
 
-# save formatted data
-#write_csv(strain_OD_DF, file.path(formattedPhenDataOut, "percent_biofilm_od.csv"))
+#save formatted percent OD data
+# write_csv(strain_perc_OD_DF, file.path(formattedPhenDataOut, "percent_biofilm_od.csv"))
 
-strain_OD_DF %>%
+#save formatted biofilm and planktonic OD data
+# percentODDF %>%
+#   spread(measure, value) %>%
+#   select(-`Percent OD`) %>%
+#   dplyr::rename(biofilmOD=`Biofilm OD`,
+#                 planktonicOD=`Planktonic OD`) %>%
+#   with_groups(c(Sample, Species, Strain, Batch, BioRep), summarize, mBiofilmOD=mean(biofilmOD), sdBiofilmOD=sd(biofilmOD), mPlanktonicOD=mean(planktonicOD), sdPlanktonicOD=sd(planktonicOD)) %>%
+#   select(Sample, Strain, Species, mBiofilmOD, sdBiofilmOD, mPlanktonicOD, sdPlanktonicOD) %>%
+#   write_csv(file.path(formattedPhenDataOut, "biofilm_and_planktonic_od.csv"))
+
+strain_perc_OD_DF %>%
   ggplot(aes(sample=mPercentOD)) +
   geom_qq_line() +
   geom_qq()
 ```
 #### One-way ANOVA
 ```{r, message=FALSE, warning=FALSE}
-strain_OD_DF %>%
+strain_perc_OD_DF %>%
   anova_test(mPercentOD~Strain) %>%
   formattable
 ```
 
 #### Tukey's HSD
 ```{r, message=FALSE, warning=FALSE}
-ODPostHoc <- strain_OD_DF %>%
+ODPostHoc <- strain_perc_OD_DF %>%
   tukey_hsd(mPercentOD~Strain, p.adjust.method = "BH")
 
+#save posthoc test results in supplementary tables file
+# suppl_xlsx <- loadWorkbook(suppTableOut)
+# addWorksheet(suppl_xlsx, "TableS5_percent_od_posthoc")
+# 
 # ODPostHoc %>%
-#   arrange(p.adj) %>%
-#   write.xlsx(file=suppTableOut, sheetName="TableS5_percent_od_posthoc", col.names=TRUE, append=TRUE)
+#  arrange(p.adj) %>%
+#  writeData(suppl_xlsx, x=.,  sheet="TableS5_percent_od_posthoc")
+# 
+# saveWorkbook(suppl_xlsx, suppTableOut, overwrite = TRUE)
 ```
-  
-```{r, message=FALSE, warning=FALSE, results='hide'}
+  Plot pairwise post-hoc results
+```{r, message=FALSE, warning=FALSE, results='hide', fig.show='hide'}
 pvals <- ODPostHoc %>%
   select(group1, group2, p.adj) %>%
   dplyr::rename(var1=group2, var2=group1, cor=p.adj) %>%
@@ -415,9 +472,13 @@ grid.echo()
 percODPostHocPlot <- grid.grab()
 ```
 
+```{r, message=FALSE,warning=FALSE, echo=FALSE}
+plot_grid(percODPostHocPlot)
+```
+
   Percent biofilm of Strains
 ```{r, message=FALSE, warning=FALSE}
-strain_OD_DF %>%
+strain_perc_OD_DF %>%
   with_groups(Strain, summarize, `Percent OD Biofilm`=mean(mPercentOD)) %>%
   arrange(-`Percent OD Biofilm`) %>%
   formattable()
@@ -425,14 +486,14 @@ strain_OD_DF %>%
 
   Average of all strains
 ```{r, message=FALSE, warning=FALSE}
-strain_OD_DF %>%
+strain_perc_OD_DF %>%
   summarize(`Average Percent OD Biofilm`=mean(mPercentOD)) %>%
   formattable()
 ```
 
-### Moran's I
+<!--- ### Moran's I
 ```{r, message=FALSE, warning=FALSE, echo=FALSE, eval=FALSE}
-# odVals <- strain_OD_DF %>%
+# odVals <- strain_perc_OD_DF %>%
 #   with_groups(Strain, summarize, x=mean(mPercentOD)) %>%
 #   mutate(Strain=as.character(Strain),
 #          Strain=case_when(Strain=="Gv101"~"101",
@@ -464,7 +525,7 @@ tree:
 ```{r, message=FALSE, warning=FALSE, echo=FALSE, eval=FALSE}
 # Moran.I(odVals, W)
 ```
-
+--->
 
 # Safranin
 ```{r, message=FALSE, warning=FALSE}
@@ -566,7 +627,7 @@ safPlot2 <- safDF %>%
         legend.position = "none") +
   labs(x=NULL, y=bquote("Safranin OD"[450]), shape="Batch")
 
-safPlots <- plot_grid(protocolBar, speciesBar, safPlot2, ncol = 1, rel_heights = c(0.06, 0.06, 1), align = "v", axis = "lr")
+safPlots <- plot_grid(protocolBar0, speciesBar0, safPlot2, ncol = 1, rel_heights = c(0.06, 0.06, 1), align = "v", axis = "lr")
 
 safPlots
 ```
@@ -583,7 +644,8 @@ safDF %>%
 #### One-way ANOVA
 ```{r, message=FALSE, warning=FALSE}
 strain_saf_DF <- safDF %>%
-  with_groups(c(Sample, Species, Strain, Batch, BioRep), summarize, mSafOD=mean(safraninOD), sdSafOD=sd(safraninOD))
+  with_groups(c(Sample, Species, Strain, Batch, BioRep), summarize, mSafOD=mean(safraninOD), sdSafOD=sd(safraninOD)) %>%
+  select(Sample, Strain, Species, mSafOD, sdSafOD)
 
 # save formatted data
 #write_csv(strain_saf_DF, file.path(formattedPhenDataOut, "safranin_od.csv"))
@@ -598,12 +660,18 @@ strain_saf_DF %>%
 safPostHoc <- strain_saf_DF %>%
   tukey_hsd(mSafOD~Strain, p.adjust.method = "BH")
 
+#save posthoc test results in supplementary tables file
+# suppl_xlsx <- loadWorkbook(suppTableOut)
+# addWorksheet(suppl_xlsx, "TableS6_safranin_posthoc")
+# 
 # safPostHoc %>%
-#   arrange(p.adj) %>%
-#   write.xlsx(file=suppTableOut, sheetName="TableS6_safranin_posthoc", col.names=TRUE, append=TRUE)
+#  arrange(p.adj) %>%
+#  writeData(suppl_xlsx, x=.,  sheet="TableS6_safranin_posthoc")
+# 
+# saveWorkbook(suppl_xlsx, suppTableOut, overwrite = TRUE)
 ```
-  
-```{r, message=FALSE, warning=FALSE, results='hide'}
+  Plot pairwise post-hoc results
+```{r, message=FALSE, warning=FALSE, results='hide', fig.show='hide'}
 pvals <- safPostHoc %>%
   select(group1, group2, p.adj) %>%
   dplyr::rename(var1=group2, var2=group1, cor=p.adj) %>%
@@ -622,7 +690,11 @@ grid.echo()
 safraninPostHocPlot <- grid.grab()
 ```
 
-### Moran's I
+```{r, message=FALSE,warning=FALSE, echo=FALSE}
+plot_grid(safraninPostHocPlot)
+```
+
+<!--- ### Moran's I
 ```{r, message=FALSE, warning=FALSE, echo=FALSE, eval=FALSE}
 # safVals <- strain_saf_DF %>%
 #   with_groups(Strain, summarize, x=mean(mSafOD)) %>%
@@ -639,17 +711,19 @@ safraninPostHocPlot <- grid.grab()
 ```{r, message=FALSE, warning=FALSE, echo=FALSE, eval=FALSE}
 # Moran.I(safVals, W)
 ```
-
+--->
 
 # Figure 4: Biofilm growth as percent OD and Safranin stain
 ```{r, message=FALSE, warning=FALSE, fig.height=5, fig.width=4}
-plot_grid(protocolBar, speciesBar, percentODPlot + speciesColor + theme(axis.text.x = element_blank(), axis.ticks.x = element_blank()), safPlot2, ncol = 1, rel_heights = c(0.07, 0.07, 1, 0.5), align = "v", axis = "lr", labels = c("A", "", "", "B"), label_size = 15)
+plot_grid(protocolBar0, speciesBar0, percentODPlot + speciesColor + theme(axis.text.x = element_blank(), axis.ticks.x = element_blank()), safPlot2, ncol = 1, rel_heights = c(0.07, 0.07, 1, 0.5), align = "v", axis = "lr", labels = c("A", "", "", "B"), label_size = 15)
 #ggsave(file.path(figureOut, paste(Sys.Date(), "Figure4_strain_biofilm.png", sep="_")))
 ```
 
 # Figure S3: Post Hoc Test Results
 ```{r, message=FALSE, warning=FALSE, fig.width=18, fig.height=5}
+#fig.width=7.5, fig.height=10
 plot_grid(ggplot()+geom_blank(), percODPostHocPlot, ggplot()+geom_blank(), safraninPostHocPlot, nrow = 1, rel_widths = c(0.1, 1, 0.1, 1), labels = c(" ", "A", " ", "B"), label_size = 20)
+#plot_grid(percODPostHocPlot, ggplot()+geom_blank()+theme_void(), safraninPostHocPlot, nrow = 3, rel_heights = c(1, 0.3, 1), labels = c("A", " ","B"), label_size = 20)
 #ggsave(file.path(figureOut, paste(Sys.Date(), "FigureS3_biofilm_posthocs.png", sep = "_")))
 ```
 
