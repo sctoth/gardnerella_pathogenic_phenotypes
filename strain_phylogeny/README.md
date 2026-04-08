@@ -69,6 +69,12 @@ Annotate with Prokka v. 1.14.6 (prokka_annotate.sh)
 `docker cp 2c3602cdf52e:/20221026_Roary_95 '/Volumes/GoogleDrive-103667279570938865306/My Drive/Callahan Lab/gardnerella_experiments/strain_genomes'` to copy output directories to repository
 Also run roary on 80% blastp results based on output from 60% threshold results. copy output with:
 `docker cp 39935359e4ca:/20221031_Roary_80 '/Volumes/GoogleDrive-103667279570938865306/My Drive/Callahan Lab/gardnerella_experiments/strain_genomes'`
-3) Build phylogeny for 95% and 80% alignments using `/scripts/MLPhylogeny.sh`. Output phylogeny used is `RAxML_bestTree.gardTree`
-
+3) Build phylogeny for 80% alignments using RAxML version 8 with `/scripts/MLPhylogeny.sh`. Output phylogeny used is `RAxML_bestTree.gardTree`
+4) Root phylogeny with *Bifidobacterium longum* 51A (GCA_004936435.1) as outgroup
+* run roary for outgroup `./scripts/roaryCoreGenome.sh` but with *B. longum* genome added to input (previously annotated with Prokka for 2024 mSystems paper
++ retrieve with `docker container ls -a` to determine container name
++ `docker cp c14a0d64f1a5:/20260208_Roary_outgroup '/Users/hannaberman/Library/CloudStorage/GoogleDrive-hlberman@ncsu.edu/My Drive/Callahan Lab/gardnerella_experiments/strain_genomes'` to copy output directories to repository  
+* Root phylogeny with EPA algorithm in RAxML version 8 with `/scripts/MLPhylogeny_root.sh`
++ `unrootedGardPhylogeny_withOutgroup.tre` has the *Bifidobacterium longum* outgroup but is not rooted
++ `rootedGardPhylogeny_noOutgroup.tre` has been rooted at the outgroup node and outgroup tip deleted
 

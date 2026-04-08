@@ -1,7 +1,11 @@
 ---
-title: "Growth at Varying pH"
+title: "Growth of Gardnerella Strains at Varying pH"
 author: "Hanna Berman"
-output: html_document
+date: '`r format(Sys.Date(), "%B %d, %Y")`'
+output:
+  html_document:
+    toc: true
+    toc_float: true
 ---
 
 **Purpose:**
@@ -19,17 +23,15 @@ output: html_document
 
 ```{r, message=FALSE,warning=FALSE}
 library(tidyverse)
-#library(xlsx)
+library(openxlsx)
 library(broom)
 library(rstatix)
-library(ape)
 library(ggbeeswarm)
 library(formattable)
 library(ggpubr)
 library(cowplot)
 library(corrplot)
 library(kableExtra)
-
 library(grid)
 library(gridGraphics)
 
@@ -42,18 +44,25 @@ strains <- c("14018", "315-A", "C0011E4", "JCP7275", "C0084H9", "JCP8108", "JCP8
 
 strains0 <- c("14018", "315-A", "C0011E4", "JCP7275", "C0084H9", "JCP8108", "JCP8017B", "C0040C2" , "UM35",  "JCP8066", "C0093B3", "AMD", "C0096A1", "C0102A2",  "UM224", "5-1", "C0179B4", "C0056B5", "101", "C0100B2", "C0101A1", "CMW7778B")
 
-species <- c("Gardnerella vaginalis", "Gardnerella sp. 2", "Gardnerella sp. 3", "Gardnerella piotii", "Gardnerella leopoldii", "Gardnerella swidsinskii", "Gardnerella sp. 7", "Gardnerella sp. 8", "Gardnerella sp. 10", "Gardnerella sp. 11", "Gardnerella sp. 12")
-
+species <- c("Gardnerella vaginalis", "Gardnerella lacydonensis", "Gardnerella pickettii", "Gardnerella piotii", "Gardnerella leopoldii", "Gardnerella swidsinskii", "Gardnerella sp. 7", "Gardnerella greenwoodii", "Gardnerella sp. 10", "Gardnerella sp. 11", "Gardnerella sp. 12")
 
 figureOut <- "../../experiments_figures"
-suppTableOut <- "../../experiments_figures/supplementary_posthoc_tables.xlsx"
+suppTableOut <- paste0("../../experiments_figures/", Sys.Date(), "_supplementary_posthoc_tables.xlsx")
 formattedPhenDataOut <- "../formatted_phenotype_data"
 ```
 
-  Import data
+  Import data and add updated species names
 ```{r, warning=FALSE, message=FALSE}
-midlog_raw_data <- read_csv("./data/pH_midlog_raw_data.csv")
-pH_raw_data <- read_csv("./data/pH_raw_data.csv")
+midlog_raw_data <- read_csv("./data/pH_midlog_raw_data.csv")   %>%
+  mutate(Species=case_when(Species=="Gardnerella sp. 2"~"Gardnerella lacydonensis",
+                           Species=="Gardnerella sp. 3"~"Gardnerella pickettii",
+                           Species=="Gardnerella sp. 8"~"Gardnerella greenwoodii",
+                           Species %!in% c("Gardnerella sp. 2", "Gardnerella sp. 3", "Gardnerella sp. 8")~Species))
+pH_raw_data <- read_csv("./data/pH_raw_data.csv")   %>%
+  mutate(Species=case_when(Species=="Gardnerella sp. 2"~"Gardnerella lacydonensis",
+                           Species=="Gardnerella sp. 3"~"Gardnerella pickettii",
+                           Species=="Gardnerella sp. 8"~"Gardnerella greenwoodii",
+                           Species %!in% c("Gardnerella sp. 2", "Gardnerella sp. 3", "Gardnerella sp. 8")~Species))
 ```
 
 
@@ -304,9 +313,11 @@ DF <- DF0 %>%
 ```{r, message=FALSE, warning=FALSE}
 pH_DF_save <- DF %>%
   with_groups(c(Number, Species, Strain, pH, Batch, Plate, BioRep), summarize, mOD=mean(OD), sdOD=sd(OD)) %>%
-  mutate(pH=as.numeric(pH))
+  mutate(pH=as.numeric(pH),
+         Sample=paste(Strain, Batch, BioRep, pH, sep=".")) %>%
+  select(Sample, Strain, Species, pH, mOD, sdOD)
 
-#write_csv(pH_DF_save, file.path(formattedPhenDataOut, "pH_growth.csv"))
+# write_csv(pH_DF_save, file.path(formattedPhenDataOut, "pH_growth.csv"))
 ```
 
 
@@ -360,7 +371,7 @@ minpHtable
 #save_kable(minpHtable, file = file.path(figureOut, paste(Sys.Date(), "Table1_minpHTable.png", sep="_")), zoom=6)
 ```
 
-### Moran's I
+<!---### Moran's I
   Is minimum pH phylogenetically correlated by Moran's I?
 ```{r, message=FALSE, warning=FALSE, eval=FALSE, echo=FALSE}
 # pHvals0 <- ttest %>%
@@ -399,7 +410,7 @@ tree:
 ```{r, message=FALSE, warning=FALSE, eval=FALSE, echo=FALSE}
 # Moran.I(pHvals, W)
 ```
-
+--->
 
 ## Compare growth at pHs
 ### Isolate Anova
@@ -421,12 +432,18 @@ odPostHocs <- DF %>%
   group_by(pH) %>%
   tukey_hsd(mOD~Strain, p.adjust.method = "BH")
 
+#save posthoc test results in supplementary tables file
+# suppl_xlsx <- loadWorkbook(suppTableOut)
+# addWorksheet(suppl_xlsx, "TablesS7_pH_posthocs")
+# 
 # odPostHocs %>%
 #  arrange(pH, p.adj) %>%
-#  write.xlsx(file=suppTableOut, sheetName="TablesS7_pH_posthocs", col.names=TRUE, append=TRUE)
+#  writeData(suppl_xlsx, x=.,  sheet="TablesS7_pH_posthocs")
+# 
+# saveWorkbook(suppl_xlsx, suppTableOut, overwrite = TRUE)
 ```
-
-```{r, message=FALSE, warning=FALSE, results='hide'}
+  Plot pairwise post-hoc results
+```{r, message=FALSE, warning=FALSE, results='hide', fig.show='hide'}
 pHODpvals <- odPostHocs %>%
   split(.$pH) %>%
   map(~select(.x, group1, group2, p.adj)) %>%
@@ -458,7 +475,7 @@ makeCorrPlots <- function(inputMatrix, pvalMatrix) {
 pHODcorrPlots <- map2(pHODcorplotInput, pHODpvals, makeCorrPlots)
 ```
 
-#### Moran's I
+<!---#### Moran's I
 ```{r, message=FALSE, warning=FALSE, eval=FALSE, echo=FALSE}
 # pHODs0 <- DF %>%
 #   with_groups(c(Number, Species, Strain, pH, Batch, Plate, BioRep, Protocol), summarize, mOD=mean(OD), sdOD=sd(OD)) %>%
@@ -476,6 +493,7 @@ pHODcorrPlots <- map2(pHODcorplotInput, pHODpvals, makeCorrPlots)
 ```{r, message=FALSE, warning=FALSE, eval=FALSE, echo=FALSE}
 #map(pHODs, ~Moran.I(.x, W))
 ```
+--->
 
 # Proportion of pH 7 growth
 ```{r, message=FALSE, warning=FALSE}
@@ -537,12 +555,18 @@ ratioPostHocs <- ratioDF %>%
   group_by(pH) %>%
   tukey_hsd(ratio~Strain, p.adjust.method = "BH")
 
+#save posthoc test results in supplementary tables file
+# suppl_xlsx <- loadWorkbook(suppTableOut)
+# addWorksheet(suppl_xlsx, "TablesS8_pH_ratio_posthocs")
+# 
 # ratioPostHocs %>%
 #  arrange(pH, p.adj) %>%
-#  write.xlsx(file=suppTableOut, sheetName="TablesS8_pH_ratio_posthocs", col.names=TRUE, append=TRUE)
+#  writeData(suppl_xlsx, x=.,  sheet="TablesS8_pH_ratio_posthocs")
+# 
+# saveWorkbook(suppl_xlsx, suppTableOut, overwrite = TRUE)
 ```
-
-```{r, message=FALSE, warning=FALSE, results='hide'}
+  Plot pairwise post-hoc results
+```{r, message=FALSE, warning=FALSE, results='hide', fig.show='hide'}
 pHratiopvals <- ratioPostHocs %>%
   filter(pH!="7") %>%
   split(.$pH) %>%
@@ -564,26 +588,25 @@ pHratiocorplotInput <-  ratioPostHocs %>%
 pHratiocorrPlots <- map2(pHratiocorplotInput, pHratiopvals, makeCorrPlots)
 ```
 
-
 # Figure 5: Growth at varying pH's
 ```{r, warning=FALSE, message=FALSE, fig.width=10, fig.height=4}
-plot_grid(pHGrowthPlot+theme(axis.title.y = element_text(size=18), strip.text.x = element_text(size=7)), pHratioPlot+theme(axis.title.y = element_text(size=18), strip.text.x = element_text(size=7)), labels = c("A", "B"), label_size = 15)
+plot_grid(pHGrowthPlot+theme(axis.title.y = element_text(size=18), strip.text.x = element_text(size=6.4)), pHratioPlot+theme(axis.title.y = element_text(size=18), strip.text.x = element_text(size=6.4)), labels = c("A", "B"), label_size = 15)
 #ggsave(filename = file.path(figureOut, paste(Sys.Date(), "Figure5_pHGrowth.png", sep = "_")))
 ```
 
 # Figure S4: Post Hoc Test Results
-```{r, message=FALSE, warning=FALSE, fig.width=15, fig.height=31} 
-
+```{r, message=FALSE, warning=FALSE, fig.width=16, fig.height=32.5} 
 ODPostHocPlots <- plot_grid(pHODcorrPlots$`3.5`, pHODcorrPlots$`4`, pHODcorrPlots$`4.5`, pHODcorrPlots$`5`, pHODcorrPlots$`5.5`, pHODcorrPlots$`6`, pHODcorrPlots$`7`, ncol=1,  labels = c("A", "C", "E", "G", "I", "K", "M"), label_size = 20)
 
 ratioPostHocPlots <- plot_grid(pHratiocorrPlots$`3.5`, pHratiocorrPlots$`4`,pHratiocorrPlots$`4.5`, pHratiocorrPlots$`5`, pHratiocorrPlots$`5.5`, pHratiocorrPlots$`6`, ggplot+geom_blank(),  ncol=1, labels = c("B", "D", "F", "H",  "J",  "L", " "), label_size = 20)
 
-plot_grid(ODPostHocPlots, ratioPostHocPlots, ncol=2, align = "hv") 
-
+plot_grid(ODPostHocPlots, 
+          ratioPostHocPlots, 
+          ncol=2, align = "hv")
 #ggsave(file.path(figureOut, paste(Sys.Date(), "FigureS4_pH_posthocs.png", sep = "_")))
 ```
 
-
+# Session Info
 ```{r}
 sessionInfo()
 ```

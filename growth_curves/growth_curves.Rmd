@@ -1,7 +1,11 @@
 ---
 title: "Gardnerella Strain Growth Curves"
 author: "Hanna Berman"
-output: html_document
+date: '`r format(Sys.Date(), "%B %d, %Y")`'
+output:
+  html_document:
+    toc: true
+    toc_float: true
 ---
 
 **Purpose:**
@@ -19,10 +23,9 @@ output: html_document
 
 ```{r, message=FALSE, warning=FALSE}
 library(tidyverse)
-#library(xlsx) java incompatible with newer versions of RStudio?
+library(openxlsx)
 library(broom)
 library(rstatix)
-library(ape)
 library(formattable)
 library(corrplot)
 library(ggbeeswarm)
@@ -40,19 +43,28 @@ strains <- c("14018", "315-A", "C0011E4", "JCP7275", "C0084H9", "JCP8108", "JCP8
 
 strains0 <- c("14018", "315-A", "C0011E4", "JCP7275", "C0084H9", "JCP8108", "JCP8017B", "C0040C2" , "UM35",  "JCP8066", "C0093B3", "AMD", "C0096A1", "C0102A2",  "UM224", "5-1", "C0179B4", "C0056B5", "101", "C0100B2", "C0101A1", "CMW7778B")
 
-species <- c("Gardnerella vaginalis", "Gardnerella sp. 2", "Gardnerella sp. 3", "Gardnerella piotii", "Gardnerella leopoldii", "Gardnerella swidsinskii", "Gardnerella sp. 7", "Gardnerella sp. 8", "Gardnerella sp. 10", "Gardnerella sp. 11", "Gardnerella sp. 12")
+species <- c("Gardnerella vaginalis", "Gardnerella lacydonensis", "Gardnerella pickettii", "Gardnerella piotii", "Gardnerella leopoldii", "Gardnerella swidsinskii", "Gardnerella sp. 7", "Gardnerella greenwoodii", "Gardnerella sp. 10", "Gardnerella sp. 11", "Gardnerella sp. 12")
+speciesAbbrevs <- c("G. vag.", "G. lac.", "G. pic.", "G. pio.", "G. leo.", "G. swi.", "7", "G. gre.", "10", "11", "12")
 
 batches <- c("1A1", "1A2", "1B1", "1B2", "2A1", "2A2", "3A1", "3A2")
 
 figureOut <- "../../experiments_figures"
-suppTableOut <- "../../experiments_figures/supplementary_posthoc_tables.xlsx"
+suppTableOut <- paste0("../../experiments_figures/", Sys.Date(), "_supplementary_posthoc_tables.xlsx")
 formattedPhenDataOut <- "../formatted_phenotype_data"
 ```
 
-  Import data
+  Import data and add updated species names
 ```{r, message=FALSE, warning=FALSE}
-midlog_raw_data <- read_csv("./data/gc_midlog_raw_data.csv")
-curve_raw_data <- read_csv("./data/gc_curve_raw_data.csv")
+midlog_raw_data <- read_csv("./data/gc_midlog_raw_data.csv") %>%
+  mutate(Species=case_when(Species=="Gardnerella sp. 2"~"Gardnerella lacydonensis",
+                           Species=="Gardnerella sp. 3"~"Gardnerella pickettii",
+                           Species=="Gardnerella sp. 8"~"Gardnerella greenwoodii",
+                           Species %!in% c("Gardnerella sp. 2", "Gardnerella sp. 3", "Gardnerella sp. 8")~Species))
+curve_raw_data <- read_csv("./data/gc_curve_raw_data.csv") %>%
+  mutate(Species=case_when(Species=="Gardnerella sp. 2"~"Gardnerella lacydonensis",
+                           Species=="Gardnerella sp. 3"~"Gardnerella pickettii",
+                           Species=="Gardnerella sp. 8"~"Gardnerella greenwoodii",
+                           Species %!in% c("Gardnerella sp. 2", "Gardnerella sp. 3", "Gardnerella sp. 8")~Species))
 ```
 
 
@@ -178,7 +190,9 @@ species_legend <- ggpubr::get_legend(speciesBar +
     guides(color=guide_legend(ncol = 1)) +
     theme(legend.position = "bottom",
           legend.direction = "horizontal"))
-
+```
+## Figure 2: Set up growth protocols
+```{r, message=FALSE, warning=FALSE}
 a <- plot_grid(overnightPlot, speciesBar, protocolBar, nrow = 1, align = "h", axis = "bt", rel_widths = c(1, 0.02, 0.02))
 b <- ggdraw(plot_grid(a, as_ggplot(species_legend), nrow=2, rel_heights = c(1, 0.3)))
 setUpGrowthFigure <- cowplot::plot_grid(b, as_ggplot(protocol_legend), ncol=1, nrow=2, rel_heights = c(1, 0.1))
@@ -441,8 +455,15 @@ protocolBar0 <- midlog_df %>%
 speciesBar0 <- midlog_df %>%
   select(Strain, Species, Protocol) %>%
   unique %>%
+  mutate(Strain=factor(Strain, levels = strains),
+         Species=factor(Species, levels = species),
+         SpeciesLab=factor(Species, levels=species, labels=speciesAbbrevs)) %>%
+  with_groups(Species, mutate, num=rank(Strain)) %>%
+  mutate(SpeciesLab=case_when(num==1~SpeciesLab,
+                              num!=1~"")) %>%
   ggplot() +
     geom_bar(aes(x=Strain, y=1, fill=Species), stat="identity", width=1.1) +
+    geom_text(aes(x=Strain, y=0.5, label=SpeciesLab), color="white", hjust = 0.25, size=2) +
     speciesFill +
     theme_void() +
     theme(legend.position = "none")
@@ -460,7 +481,7 @@ species_legend <- cowplot::get_legend(
 
 #plots
 plots <- plot_grid(protocolBar0, speciesBar0, ratePlot, ncol = 1, rel_heights = c(0.08, 0.08, 1), align = "v", axis = "bt")
-plot_grid(protocol_legend, species_legend, plots, ncol=1, rel_heights = c(0.1, 0.25,  1))
+plot_grid(protocol_legend, plots, ncol=1, rel_heights = c(0.1, 0.25,  1))
 ```
 
 
@@ -488,8 +509,9 @@ strain_growth_rate_DF <- growth_rate %>%
   separate(SampWell, c("Strain", "Batch", "BioRep", "Well"), sep="\\.", remove=FALSE) %>%
   mutate(Sample=paste(Strain, Batch, BioRep, sep=".")) %>%
   left_join(unique(curve[,c("Strain", "Species")])) %>%
-  with_groups(c(Sample, Species, Strain, Batch, BioRep), summarize, mSlope=mean(slope), sdSlope=sd(slope)) %>%
-  mutate(Strain=factor(Strain, levels=strains))
+  with_groups(c(Sample, Strain, Species, Batch, BioRep), summarize, mSlope=mean(slope), sdSlope=sd(slope)) %>%
+  mutate(Strain=factor(Strain, levels=strains)) %>%
+  select(-Batch, -BioRep)
 
 #save formatted growth rate data
 #write_csv(strain_growth_rate_DF, file.path(formattedPhenDataOut, "growth_rate.csv"))
@@ -503,12 +525,13 @@ strain_growth_rate_DF %>%
 growthRatePostHoc <- strain_growth_rate_DF %>%
   tukey_hsd(mSlope~Strain, p.adjust.method = "BH")
 
+#save posthoc test results in supplementary tables file
 # growthRatePostHoc %>%
 #  arrange(p.adj) %>%
-# write.xlsx(file=suppTableOut, sheetName="TableS3_growth_rate_posthoc", col.names=TRUE, append=FALSE)
+#  write.xlsx(file=suppTableOut, sheetName="TableS3_growth_rate_posthoc")
 ```
-
-```{r, message=FALSE, warning=FALSE, results='hide'}
+  Plot pairwise post-hoc results
+```{r, message=FALSE, warning=FALSE, results='hide', fig.show='hide'}
 min(growthRatePostHoc$p.adj)
 
 pvals <- growthRatePostHoc %>%
@@ -525,12 +548,17 @@ growthRatePostHoc %>%
   column_to_rownames(var="rowname") %>%
   as.matrix() %>%
   corrplot(is.corr=FALSE, type = "lower", tl.col="black", p.mat = pvals, insig = "label_sig", sig.level = c(0.001, 0.01, 0.05), pch.cex = 0.9)
-#bg="light gray", cl.pos="n",
+
 grid.echo()
 growthRatePostHocPlot <- grid.grab()
 ```
 
-### Moran's I
+```{r, message=FALSE,warning=FALSE, echo=FALSE}
+plot_grid(growthRatePostHocPlot)
+```
+
+
+<!---### Moran's I
 ```{r, message=FALSE, warning=FALSE, eval=FALSE, echo=FALSE}
 # growthRates <- strain_growth_rate_DF %>%
 #   with_groups(Strain, summarize, x=mean(mSlope)) %>%
@@ -564,6 +592,7 @@ tree:
 ```{r, message=FALSE, warning=FALSE, eval=FALSE, echo=FALSE}
 # Moran.I(growthRates, W)
 ```
+--->
 
 # Carrying Capacity
 ```{r, message=FALSE, warning=FALSE}
@@ -589,7 +618,7 @@ carryingCapacityPlot <- carryingCapacity %>%
   labs(x=NULL, y=bquote("Carrying Capacity (OD"[600]~")"))
 
 plots2 <- plot_grid(protocolBar0, speciesBar0, carryingCapacityPlot, ncol = 1, rel_heights = c(0.08, 0.08, 1), align = "v", axis = "bt")
-plot_grid(protocol_legend, species_legend, plots2, ncol=1, rel_heights = c(0.1, 0.25,  1))
+plot_grid(protocol_legend, plots2, ncol=1, rel_heights = c(0.1, 0.25,  1))
 ```
 
 ## Compare Carrying Capacity
@@ -608,9 +637,11 @@ qqplot
 #### One-way ANOVA
 ```{r, message=FALSE, warning=FALSE}
 strain_carrying_cap_DF <- carryingCapacity %>%
-  mutate(Strain=factor(Strain, levels=strains))
+  mutate(Strain=factor(Strain, levels=strains)) %>%
+  select(Sample, Strain, Species, maxOD, maxODsd)
+  
 
-#save formatted growth rate data
+#save formatted carrying capacity data
 #write_csv(strain_carrying_cap_DF, file.path(formattedPhenDataOut, "carrying_capacity.csv"))
 
 strain_carrying_cap_DF %>%
@@ -623,12 +654,18 @@ strain_carrying_cap_DF %>%
 carCapacPostHoc <- carryingCapacity %>%
   tukey_hsd(maxOD~Strain, p.adjust.method = "BH")
 
+#save posthoc test results in supplementary tables file
+# suppl_xlsx <- loadWorkbook(suppTableOut)
+# addWorksheet(suppl_xlsx, "TableS4_car_capac_posthoc")
+# 
 # carCapacPostHoc %>%
 #  arrange(p.adj) %>%
-#  write.xlsx(file=suppTableOut, sheetName="TableS4_car_capac_posthoc", col.names=TRUE, append=TRUE)
+#  writeData(suppl_xlsx, x=.,  sheet="TableS4_car_capac_posthoc")
+# 
+# saveWorkbook(suppl_xlsx, suppTableOut, overwrite = TRUE)
 ```
-
-```{r, message=FALSE, warning=FALSE, results='hide'}
+  Plot pairwise post-hoc results
+```{r, message=FALSE, warning=FALSE, results='hide', fig.show='hide'}
 min(carCapacPostHoc$p.adj)
 
 pvals <- carCapacPostHoc %>%
@@ -649,6 +686,11 @@ grid.echo()
 carCapacPostHocPlot <- grid.grab()
 ```
 
+```{r, message=FALSE, warning=FALSE, echo=FALSE}
+plot_grid(carCapacPostHocPlot)
+```
+
+<!---
 ### Moran's I
 ```{r, message=FALSE, warning=FALSE, eval=FALSE, echo=FALSE}
 # carCapacities <- carryingCapacity %>%
@@ -667,6 +709,7 @@ carCapacPostHocPlot <- grid.grab()
 ```{r, message=FALSE, warning=FALSE, eval=FALSE, echo=FALSE}
 # Moran.I(carCapacities, W)
 ```
+--->
 
 # Figure 3: Growth stats
 ```{r, warning=FALSE, message=FALSE, fig.height=3.5, fig.width=8.5}
@@ -677,7 +720,9 @@ plot_grid(ggplot()+geom_blank()+theme_void(), growthCurveFigures, figure3B, rel_
 
 # Figure S2: Post Hoc Test Results
 ```{r, message=FALSE, warning=FALSE, fig.width=16, fig.height=4}
+#fig.width=7.5, fig.height=10
 plot_grid(ggplot()+geom_blank(), growthRatePostHocPlot, ggplot()+geom_blank(), carCapacPostHocPlot, nrow = 1, rel_widths = c(0.1, 1, 0.1, 1), labels = c(" ", "A", " ", "B"), label_size = 20)
+#plot_grid(growthRatePostHocPlot, ggplot()+geom_blank()+theme_void(), carCapacPostHocPlot, nrow = 3, rel_heights = c(1, 0.3, 1), labels = c("A", " ","B"), label_size = 20)
 #ggsave(file.path(figureOut, paste(Sys.Date(), "FigureS2_growth_posthocs.png", sep = "_")))
 ```
 
