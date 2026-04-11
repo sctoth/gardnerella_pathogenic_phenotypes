@@ -1,5 +1,5 @@
 ---
-title: "Identifying a Phylogenetic Signal in Garderella Phenotypic Data"
+title: "Testing Phylogenetic Signal in Garderella Phenotypic Data"
 author: "Spencer Toth"
 date: "`r Sys.Date()`"
 output:
@@ -9,6 +9,14 @@ output:
   pdf_document: default
 ---
 
+**Purpose:**
+  To assess phylogenetic association of *Gardnerella* phenotypes related to pathogenicity.
+  
+**Overview**
+  For each observed phenotype across 22 Gardnerella spp. strains, phylosignal (v1.3.1) was implemented to conduct Moran's I and Pagel's Lambda tests to assess for phylogenetic signal. The original maximum likelihood (ML) phylogenetic tree was used for Moran's I tests across phenotypes and for Pagel's Lambda the ML tree was converted to an ultrametric tree using the chronoMPL function from the R package ape (v5.8.1). Statistical signficance was determined using package's default permutation test for Moran's I, and Likelihood Ratio Test (LRT) for Pagel's Lambda; an additional custom random permutation test was implemented for Pagel's Lambda values. 
+
+  
+# Load R Packages
 ```{r, message=FALSE, warning=FALSE}
 library(tidyverse)    
 library(ggtree)
@@ -28,10 +36,10 @@ library(gt)
 `%!in%` <- negate(`%in%`)
 ```
 
-# Import Files 
+# Import: Phylogeny + Phenotype
 ```{r, message=FALSE, warning=FALSE, echo=TRUE}
 # Full, Rooted Phylogenetic tree 
-tr <- read.tree("/Users/spencertoth/Desktop/Research/gardnerella_phylogenetic_signal/rootedGardPhylogeny_noOutgroup.tre")
+tr <- read.tree("../strain_phylogeny/rootedGardPhylogeny_noOutgroup.tre")
 is.rooted(tr)
 
 # Phenotype files 
@@ -42,23 +50,24 @@ safranin_od_data_file <- read_csv("../formatted_phenotype_data/safranin_od.csv")
 mic_data_file <-read.csv("../formatted_phenotype_data/metro_mic.csv")
 pH_growth_data_file <- read_csv("../formatted_phenotype_data/pH_growth.csv")
 
+# Strain IDs + genomospecies 
+strainIDs <- read.csv("../strain_phylogeny/strainIDs.csv", stringsAsFactors = FALSE)
+```
+
+```{r, message=FALSE, warning=FALSE, echo=TRUE}
 # Rename tree nodes to match strain names in strain-phenotype data 
 numeric_tips <- tr$tip.label[tr$tip.label %in% c("101", "5-1")]
 tr$tip.label[match(numeric_tips, tr$tip.label)] <- paste0("Gv", numeric_tips)
-#tr$tip.label[tr$tip.label == "14018"] <- "S14018"
 tip_labels <- tr$tip.label
-is.rooted(tr)
 
 # Append genomospecies to strain name in tree  
-strainIDs <- read.csv("/Users/spencertoth/Desktop/Research/gardnerella_phylogenetic_signal/gardnerella_pathogenic_phenotypes/strain_phylogeny/strainIDs.csv",
-                      stringsAsFactors = FALSE)
 strainIDs$strain <- as.character(strainIDs$strain)
 tip_labels <- tr$tip.label
 idx <- match(tip_labels, strainIDs$strain)
 new_tip_labels <- paste0(tip_labels, "_", strainIDs$genomospecies[idx])
 tr$tip.label <- new_tip_labels
 
-# Append genomospecies to strain name in phenotype dataset 
+# Append genomospecies to strain names in phenotype files  
 add_gs <- function(df) {
   df %>%
     mutate(Strain = as.character(Strain)) %>%
@@ -96,7 +105,7 @@ safranin_od_data <- safranin_od_data_file %>%
 sf_vector <- setNames(safranin_od_data$mean_mSafOD, safranin_od_data$Strain)
 ```
 
-## Subset full phylogenetic tree to the strains with corresponding phenotype information and generate ultrametric tree
+## Subset full phylogenetic tree to the strains with corresponding phenotype information and generate ultrametric tree  
 ```{r, message=FALSE, warning=FALSE, echo=TRUE}
 # Phylogeny with 22 strains: carrying capacity, exponential growth rate and minimum pH growth
 data_tips <- intersect(names(gr_vector), tr$tip.label)  
@@ -125,7 +134,7 @@ tr_subset_ultra_plot
 
 
 # Phylogeny with 21 strains: biofilm density (safranin stain) and biofilm formation 
-# strain 14018 did not pass the QC step in these experiment
+# strain 14018 did not pass the QC step in these experiments
 data_tips_02 <- intersect(names(sf_vector), tr$tip.label)  
 tr_subset_02  <- keep.tip(tr, data_tips_02)
 tip_labels_02 <- tr_subset_02$tip.label
@@ -134,6 +143,8 @@ n_strains_02 <- length(tip_labels_02)
 tr_subset_ultra_02 <- chronoMPL(tr_subset_02) 
 tr_subset_ultra_02$edge.length[tr_subset_ultra_02$edge.length <= 0] <- 1e-6
 ``` 
+
+# phylosignal: Original vs. Ultrametric Tree
 
 ## Moran's I and Pagel's Lambda: Phylogenetic Signal along BM Gradient for Phylogenetic Tree (22 Gardnerella Strains)
 ```{r, message=FALSE, warning=FALSE, echo=TRUE, results="hide"}
@@ -188,7 +199,7 @@ print(paste("Moran's I at 100% BM:", round(mean_100bm_I, 4)))
 print(paste("Pagel's λ at 100% BM:", round(mean_100bm_lambda, 4)))
 ``` 
 
-# Phenotype: Exponential Growth Rate
+# Phenotype Analysis: Exponential Growth Rate
 ```{r, message=FALSE, warning=FALSE, echo=TRUE}
 set.seed(42)
 
@@ -196,10 +207,11 @@ set.seed(42)
 # Permute the actual growth_rate values (scramble across tree tips)
 random <- sample(gr_vector, size = length(tip_labels), replace = FALSE)
 
-# Brownian Motion Simulated Dataset (Original Tree for Moran's I Test) 
+# Brownian Motion Simulated Dataset (Using the original tree for Moran's I Test) 
 observed <- gr_vector[match(tip_labels, names(gr_vector))]
 target_mean <- mean(observed)
 target_sd <- sd(observed)
+
 # Scale to match observed growth_rate mean and standard deviation  
 bm_raw <- rTraitCont(tr_subset, model = "BM")
 bm <- (bm_raw - mean(bm_raw)) / sd(bm_raw) * target_sd + target_mean
@@ -288,7 +300,7 @@ for(j in 1:ncol(trait_data)) {
     lambda_null[i] <- phylosig(tree, shuffled_trait, method = "lambda")$lambda
   }
   
-  # right-tailed (We reject H₀ if observed λ is unexpectedly large i.e. right tail)
+  # right-tailed (We reject H₀ if observed λ is unexpectedly large)
   p_val <- mean(lambda_null >= obs_lambda)
   
   results[[trait_name]] <- list(
@@ -321,7 +333,7 @@ for(trait_name in names(results)) {
           col=rgb(1,0,0,0.3), border=NA)
 }
 
-# Print Results 
+# Print results 
 results_df <- data.frame(
   trait = trait_names,
   lambda = sapply(results, function(x) round(x$obs_lambda, 4)),
@@ -339,7 +351,7 @@ for(trait_name in names(results)) {
   null_df <- data.frame(
     lambda = sorted_null,                    
     rank = 1:length(sorted_null),            
-    above_obs = sorted_null >= res$obs_lambda  # Red if ≥ observed
+    above_obs = sorted_null >= res$obs_lambda   
   )
   
   p <- ggplot(null_df, aes(x = rank, y = lambda, color = above_obs)) +
@@ -419,6 +431,7 @@ barplot.phylo4d(p4d_carrying_capacity_ultra, tree.type = "phylo", tree.ladderize
 ```{r, message=FALSE, warning=FALSE, echo=TRUE}
 set.seed(42)
 phyloSignal(p4d = p4d_carrying_capacity, methods = c("I"))
+
 # Phylogenetic correlogram (uses Local Moran's I autocorrelation)
 carrying_capacity.crlg <- phyloCorrelogram(p4d_carrying_capacity, trait = "carrying_capacity")
 random.crlg <- phyloCorrelogram(p4d_carrying_capacity, trait = "random")
@@ -440,7 +453,7 @@ phyloSignal(p4d = p4d_carrying_capacity_ultra, methods = c("Lambda"))
 ```{r, message=FALSE, warning=FALSE, echo=TRUE, results="hide"}
 
 tree <- as(p4d_carrying_capacity_ultra, "phylo")
-trait_data <- p4d_carrying_capacity_ultra@data   
+trait_data <- p4d_carrying_capacity_ultra@data  # (growth_rate, random, bm) 
 trait_names <- colnames(trait_data)
 
 n_perm <- 999
@@ -450,19 +463,14 @@ results <- list()
 for(j in 1:ncol(trait_data)) {
   trait <- trait_data[[j]]
   trait_name <- trait_names[j]
-  
   cat("\n---", trait_name, "---\n")
-  
   obs_lambda <- phylosig(tree, trait, method = "lambda")$lambda
-  
   lambda_null <- numeric(n_perm)
   for(i in 1:n_perm) {
     shuffled_trait <- sample(trait)
     lambda_null[i] <- phylosig(tree, shuffled_trait, method = "lambda")$lambda
   }
-  
   p_val <- mean(lambda_null >= obs_lambda)
-  
   results[[trait_name]] <- list(
     obs_lambda = obs_lambda,
     p_value = p_val,
@@ -542,9 +550,10 @@ grid.arrange(grobs = rank_plots, ncol = 3, top = "Pagel's λ Permutation Test: R
 ```
 
 
-# Phenotype: Biofilm Formation
+# Phenotype: Biofilm Formation -- Percent Biofilm Optical Density
 ```{r, message=FALSE, warning=FALSE, echo=TRUE}
 set.seed(42)
+
 # Permute the actual growth_rate values (scramble across tree tips)
 random <- sample(pb_vector, size = length(tip_labels_02), replace = FALSE)
 observed <- pb_vector[match(tip_labels_02, names(pb_vector))]
@@ -611,7 +620,7 @@ phyloSignal(p4d = p4d_percent_biofilm_ultra, methods = c("Lambda"))
 ### Pagel's Lambda Permutation Test
 ```{r, message=FALSE, warning=FALSE, echo=TRUE, results="hide"}
 tree <- as(p4d_percent_biofilm_ultra, "phylo")
-trait_data <- p4d_percent_biofilm_ultra@data   
+trait_data <- p4d_percent_biofilm_ultra@data  # (growth_rate, random, bm) 
 trait_names <- colnames(trait_data)
 
 # Number of permutations
@@ -625,10 +634,9 @@ results <- list()
 for(j in 1:ncol(trait_data)) {
   trait <- trait_data[[j]]
   trait_name <- trait_names[j]
-  
   cat("\n---", trait_name, "---\n")
   
- # Pagel's λ  
+ # Conduct Pagel's λ Test
   obs_lambda <- phylosig(tree, trait, method = "lambda")$lambda
   
   # Generate null distribution using 999 permutations of trait data
@@ -637,15 +645,12 @@ for(j in 1:ncol(trait_data)) {
     shuffled_trait <- sample(trait)
     lambda_null[i] <- phylosig(tree, shuffled_trait, method = "lambda")$lambda
   }
-  
   p_val <- mean(lambda_null >= obs_lambda)
-  
   results[[trait_name]] <- list(
     obs_lambda = obs_lambda,
     p_value = p_val,
     null_dist = lambda_null
   )
-  
   cat("Observed λ =", round(obs_lambda, 4), "\n")
   cat("p-value =", round(p_val, 4), "\n")
 }
@@ -720,7 +725,7 @@ theme(
 grid.arrange(grobs = rank_plots, ncol = 3, top = "Pagel's λ Permutation Test: Rank Order Plots")
 ```
 
-# Phenotype: Safranin OD450 (Biofilm Density) 
+# Phenotype: Biofilm Formation -- Safranin OD450 (Biofilm Density) 
 ```{r, message=FALSE, warning=FALSE, echo=TRUE}
 set.seed(42)
 # Permute the actual growth_rate values (scramble across tree tips)
@@ -796,21 +801,14 @@ results <- list()
 for(j in 1:ncol(trait_data)) {
   trait <- trait_data[[j]]
   trait_name <- trait_names[j]
-  
   cat("\n---", trait_name, "---\n")
-  
- # Pagel's λ  
   obs_lambda <- phylosig(tree, trait, method = "lambda")$lambda
-  
   lambda_null <- numeric(n_perm)
   for(i in 1:n_perm) {
     shuffled_trait <- sample(trait)
     lambda_null[i] <- phylosig(tree, shuffled_trait, method = "lambda")$lambda
   }
-  
-  
   p_val <- mean(lambda_null >= obs_lambda)
-  
   results[[trait_name]] <- list(
     obs_lambda = obs_lambda,
     p_value = p_val,
@@ -853,11 +851,11 @@ print(results_df)
 rank_plots <- list()
 for(trait_name in names(results)) {
   res <- results[[trait_name]]
-  sorted_null <- sort(res$null_dist)  # smallest λ first → largest λ last
+  sorted_null <- sort(res$null_dist)   
   null_df <- data.frame(
-    lambda = sorted_null,                    # Sorted λ values
-    rank = 1:length(sorted_null),           # 1=lowest λ, N=highest λ
-    above_obs = sorted_null >= res$obs_lambda  # Red if ≥ observed
+    lambda = sorted_null,                    
+    rank = 1:length(sorted_null),          
+    above_obs = sorted_null >= res$obs_lambda  
   )
   
   p <- ggplot(null_df, aes(x = rank, y = lambda, color = above_obs)) +
@@ -889,4 +887,9 @@ theme(
 grid.arrange(grobs = rank_plots, ncol = 3, top = "Pagel's λ Permutation Test: Rank Order Plots")
 
 
+```
+
+# Session Info
+```{r}
+sessionInfo()
 ```
