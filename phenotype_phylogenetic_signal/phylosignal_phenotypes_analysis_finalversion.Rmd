@@ -15,9 +15,13 @@ output:
 **Overview**
   For each observed phenotype across 22 Gardnerella spp. strains, phylosignal (v1.3.1) was implemented to conduct Moran's I and Pagel's Lambda tests to assess for phylogenetic signal. The original maximum likelihood (ML) phylogenetic tree was used for Moran's I tests across phenotypes and for Pagel's Lambda the ML tree was converted to an ultrametric tree using the chronoMPL function from the R package ape (v5.8.1). Statistical signficance was determined using package's default permutation test for Moran's I, and Likelihood Ratio Test (LRT) for Pagel's Lambda; an additional custom random permutation test was implemented for Pagel's Lambda values. 
 
-  
+```{r setup, include=FALSE}
+knitr::opts_knit$set(root.dir = "..")
+```
+
 # Load R Packages
 ```{r, message=FALSE, warning=FALSE}
+library(readr)
 library(tidyverse)    
 library(ggtree)
 library(phylosignal)
@@ -39,19 +43,17 @@ library(gt)
 # Import: Phylogeny + Phenotype
 ```{r, message=FALSE, warning=FALSE, echo=TRUE}
 # Full, Rooted Phylogenetic tree 
-tr <- read.tree("../strain_phylogeny/rootedGardPhylogeny_noOutgroup.tre")
+tr <- read.tree("strain_phylogeny/rootedGardPhylogeny_noOutgroup.tre")
 is.rooted(tr)
 
 # Phenotype files 
-growth_rate_data_file <- read_csv("../formatted_phenotype_data/growth_rate.csv")
-car_cap_data_file <- read_csv("../formatted_phenotype_data/carrying_capacity.csv")
-percent_biofilm_od_data_file  <- read_csv("../formatted_phenotype_data/percent_biofilm_od.csv")
-safranin_od_data_file <- read_csv("../formatted_phenotype_data/safranin_od.csv")
-mic_data_file <-read.csv("../formatted_phenotype_data/metro_mic.csv")
-pH_growth_data_file <- read_csv("../formatted_phenotype_data/pH_growth.csv")
+growth_rate_data_file <- read_csv("formatted_phenotype_data/growth_rate.csv")
+car_cap_data_file <- read_csv("formatted_phenotype_data/carrying_capacity.csv")
+percent_biofilm_od_data_file  <- read_csv("formatted_phenotype_data/percent_biofilm_od.csv")
+safranin_od_data_file <- read_csv("formatted_phenotype_data/safranin_od.csv")
 
 # Strain IDs + genomospecies 
-strainIDs <- read.csv("../strain_phylogeny/strainIDs.csv", stringsAsFactors = FALSE)
+strainIDs <- read.csv("strain_phylogeny/strainIDs.csv", stringsAsFactors = FALSE)
 ```
 
 ```{r, message=FALSE, warning=FALSE, echo=TRUE}
@@ -133,7 +135,7 @@ tr_subset_ultra_plot <- ggtree(tr_subset_ultra) +
 tr_subset_ultra_plot
 
 
-# Phylogeny with 21 strains: biofilm density (safranin stain) and biofilm formation 
+# Phylogeny with 21 strains: biofilm density (safranin stain) and biofilm formation  
 # strain 14018 did not pass the QC step in these experiments
 data_tips_02 <- intersect(names(sf_vector), tr$tip.label)  
 tr_subset_02  <- keep.tip(tr, data_tips_02)
@@ -156,7 +158,7 @@ phylosim <- phyloSim(tree = tr_subset, methods = c("I", "Lambda"), model = "BM",
 ### Original (Non-Ultrametric) Tree 
 ```{r, message=FALSE, warning=FALSE, echo=TRUE}
 plot(phylosim, stacked.methods = FALSE, quantiles = c(0, 1), ylab = "Phylogenetic Signal Value")
-plot.phylosim(phylosim, what = "pval", stacked.methods = TRUE)
+plot(phylosim(phylosim, what = "pval", stacked.methods = TRUE))
 
 # 0% BM  
 # Moran's I
@@ -181,7 +183,7 @@ print(paste("Pagel's λ at 100% BM:", round(mean_100bm_lambda, 4)))
 ### Ultrametric Tree 
 ```{r, message=FALSE, warning=FALSE, echo=TRUE}
 plot(phylosim_ultra, stacked.methods = FALSE, quantiles = c(0, 1), ylab = "Phylogenetic Signal Value")
-plot.phylosim(phylosim_ultra, what = "pval", stacked.methods = TRUE)
+plot(phylosim(phylosim_ultra, what = "pval", stacked.methods = TRUE))
 
 #0% BM 
 mean_0bm_I_ultra <- mean(phylosim_ultra$sim.stat[1, 1, ])  # I at 0% BM 
@@ -253,6 +255,7 @@ barplot.phylo4d(p4d_growth_rate_ultra, tree.type = "phylo", tree.ladderize = TRU
 ```{r, message=FALSE, warning=FALSE, echo=TRUE}
 set.seed(42)
 phyloSignal(p4d = p4d_growth_rate, methods = c("I"))
+
 
 # Phylogenetic correlogram (uses Local Moran's I autocorrelation)
 growth_rate.crlg <- phyloCorrelogram(p4d_growth_rate, trait = "growth_rate")
