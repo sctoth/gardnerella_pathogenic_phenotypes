@@ -3,4 +3,4 @@ Purpose: To assess phylogenetic association of measured _Gardnerella_ phenotypes
 Overview: For each observed phenotype across 22 Gardnerella spp. strains, phylosignal (v1.3.1) was implemented to conduct Moran's I and Pagel's Lambda tests to assess for phylogenetic signal. The original maximum likelihood (ML) phylogenetic tree was used for Moran's I tests across phenotypes and for Pagel's Lambda the ML tree was converted to an ultrametric tree using the chronoMPL function from the R package ape (v5.8.1). Statistical signficance was determined using package's default permutation test for Moran's I, and Likelihood Ratio Test (LRT) for Pagel's Lambda; an additional custom random permutation test was implemented for Pagel's Lambda values. 
 
 * `phylogenetic_signal_testing.Rmd`: R code to test phylogenetic signal in measured phenotypes
-* `phenotype_distributions.Rmd`: R code to observe replicate values and average across isolates to assess phenotype distribution per strain 
+* `phenotype_distributions.Rmd`: R code to plot replicate values and average across isolates to assess phenotype distribution per strain 
